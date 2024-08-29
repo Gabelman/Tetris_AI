@@ -273,7 +273,7 @@ def train_ai(continue_training=True):
 
                 if check_game_over(grid, current_tetromino):
                     game_over = True
-                    reward -= 50  # Larger penalty for game over
+                    reward -= 500  # Larger penalty for game over
             else:
                 reward = -0.01  # Small penalty for each move
 
@@ -284,7 +284,7 @@ def train_ai(continue_training=True):
         if episode % update_target_every == 0:
             agent.update_target_model()
 
-        if episode % 10 == 0:  # Save every 10 episodes
+        if episode % 1 == 0:  # Save every 1 episodes
             torch.save(agent.model.state_dict(), "tetris_ai_model.pth")
             agent.save_memory()
             print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Lines Cleared: {lines_cleared}, Epsilon: {agent.epsilon:.2f}")
