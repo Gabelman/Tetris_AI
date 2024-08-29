@@ -41,9 +41,28 @@ class Tetromino:
         self.shape = shape
         self.x = COLUMNS // 2 - len(shape[0]) // 2
         self.y = 0
+        self.rotation_state = 0
 
-    def rotate(self):
-        self.shape = [list(row) for row in zip(*self.shape[::-1])]
+    def rotate(self, grid):
+        if len(self.shape) == 2 and len(self.shape[0]) == 2:  # O piece doesn't rotate
+            return
+
+        original_x = self.x
+        original_y = self.y
+        original_shape = self.shape
+
+        # Perform rotation
+        rotated = [list(row) for row in zip(*self.shape[::-1])]  # Clockwise rotation
+        
+        # Check if rotation is possible
+        self.shape = rotated
+        if self.collision(grid):
+            # If collision occurs, revert the rotation
+            self.shape = original_shape
+            self.x = original_x
+            self.y = original_y
+        else:
+            self.rotation_state = (self.rotation_state + 1) % 4
 
     def collision(self, grid, offset=(0, 0)):
         off_x, off_y = offset
@@ -237,11 +256,7 @@ def train_ai(continue_training=True):
                 if current_tetromino.collision(grid):
                     current_tetromino.x -= 1
             elif action == 2:  # Rotate
-                current_tetromino.rotate()
-                if current_tetromino.collision(grid):
-                    current_tetromino.rotate()
-                    current_tetromino.rotate()
-                    current_tetromino.rotate()
+                current_tetromino.rotate(grid)
 
             # Move tetromino down
             current_tetromino.y += 1
@@ -308,11 +323,7 @@ def play_ai():
             if current_tetromino.collision(grid):
                 current_tetromino.x -= 1
         elif action == 2:  # Rotate
-            current_tetromino.rotate()
-            if current_tetromino.collision(grid):
-                current_tetromino.rotate()
-                current_tetromino.rotate()
-                current_tetromino.rotate()
+            current_tetromino.rotate(grid)
 
         current_tetromino.y += 1
         if current_tetromino.collision(grid):
