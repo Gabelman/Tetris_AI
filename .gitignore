@@ -4,3 +4,8 @@
 /Visualize_game.py
 /tetris_ai.py
 /tetris_ai_model - Kopie.pth
+_pycache_
+
+
+# evironment
+.venv/

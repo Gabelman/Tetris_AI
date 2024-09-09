@@ -1,0 +1,9 @@
+ale-py==0.8.1
+cloudpickle==3.0.0
+Farama-Notifications==0.0.4
+gymnasium==0.29.1
+importlib_resources==6.4.4
+numpy==2.1.1
+Shimmy==0.2.1
+tqdm==4.66.5
+typing_extensions==4.12.2
