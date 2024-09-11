@@ -24,6 +24,8 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
+GRAY = (170, 170, 170)  # Light gray color only for grid lines
+
 
 # Tetromino shapes
 SHAPES = [
@@ -99,6 +101,7 @@ def clear_lines(grid):
         grid.insert(0, [0 for _ in range(COLUMNS)])
     return len(full_rows)
 
+
 def check_game_over(grid, tetromino):
     return tetromino.collision(grid, offset=(0, 0))
 
@@ -117,18 +120,55 @@ def draw_tetromino(shape, x, y, screen, color):
                     )
                 )
 
+def calculate_bumpiness(grid):
+        heights = [0] * COLUMNS
+        for col in range(COLUMNS):
+            for row in range(ROWS):
+                if grid[row][col]:
+                    heights[col] = ROWS - row
+                    break
+        
+        bumpiness = 0
+        for i in range(COLUMNS - 1):
+            bumpiness += abs(heights[i] - heights[i+1])
+        
+        return bumpiness
+
+def count_holes(grid):
+    holes = 0
+    for col in range(COLUMNS):
+        block_found = False
+        for row in range(ROWS):
+            if grid[row][col]:
+                block_found = True
+            elif block_found:
+                holes += 1
+    return holes
+
+def calculate_height(grid):
+    for row in range(ROWS):
+        if any(grid[row]):
+            return ROWS - row
+    return 0
+
+def count_clearable_lines(grid):
+    return sum(1 for row in grid if all(row))
+
 # AI implementation
 class TetrisAI(nn.Module):
     def __init__(self):
         super(TetrisAI, self).__init__()
-        self.fc1 = nn.Linear(COLUMNS * ROWS + 4, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 4)  # 4 possible actions: left, right, rotate, do nothing
+        input_size = COLUMNS * ROWS + 8  # +8 for x, y, shape dimensions, bumpiness, holes, height, clearable_lines
+        self.fc1 = nn.Linear(input_size, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 32)
+        self.fc4 = nn.Linear(32, 4) # 4 possible actions: left, right, rotate, do nothing
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        return self.fc3(x)
+        x = torch.relu(self.fc3(x))
+        return self.fc4(x)
 
 class DQNAgent:
     def __init__(self):
@@ -144,9 +184,14 @@ class DQNAgent:
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
 
+
     def get_state(self, grid, tetromino):
         state = np.array(grid).flatten()
-        state = np.append(state, [tetromino.x, tetromino.y, len(tetromino.shape), len(tetromino.shape[0])])
+        holes = count_holes(grid)
+        bumpiness = calculate_bumpiness(grid)
+        height = calculate_height(grid)
+        lines_clearable = count_clearable_lines(grid)
+        state = np.append(state, [tetromino.x, tetromino.y, len(tetromino.shape), len(tetromino.shape[0]), holes, bumpiness, height, lines_clearable]) 
         return torch.FloatTensor(state)
 
     def act(self, state):
@@ -202,24 +247,19 @@ class DQNAgent:
 
 def calculate_reward(grid, lines_cleared, height_placed):
     reward = 0
-    
-    # Reward for placing a piece
-    reward += 1
-    
-    # Reward based on lines cleared
     reward += lines_cleared ** 2 * 50
-    
-    # Reward for lower placements
     reward += (ROWS - height_placed) / 10
-    
-    # Penalty for height differences
+    reward -= count_holes(grid) * 2
+    reward -= calculate_bumpiness(grid) * 0.5
+    reward -= calculate_height(grid) * 0.2
+    '''# Penalty for height differences
     for i in range(COLUMNS - 1):
         height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
         reward -= height_diff * 0.1
-    
+    '''
     return reward
 
-def train_ai(continue_training=True):
+def train_ai(continue_training=False):
     agent = DQNAgent()
     
     if continue_training:
@@ -310,6 +350,12 @@ def play_ai():
 
     while running:
         screen.fill(BLACK)
+
+        # Draw gray grid lines
+        for x in range(COLUMNS + 1):
+            pygame.draw.line(screen, GRAY, (x * GRID_SIZE, 0), (x * GRID_SIZE, SCREEN_HEIGHT))
+        for y in range(ROWS + 1):
+            pygame.draw.line(screen, GRAY, (0, y * GRID_SIZE), (SCREEN_WIDTH - PREVIEW_WIDTH, y * GRID_SIZE))
         
         state = agent.get_state(grid, current_tetromino)
         action = agent.act(state)
