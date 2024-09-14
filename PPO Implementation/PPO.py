@@ -24,14 +24,14 @@ class PPO():
         current_timesteps = 0
 
         while current_timesteps < total_timesteps:
-            batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_lengths, batch_done_mask = self.sample()
+            batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.sample()
             current_timesteps += torch.sum(batch_lengths)
 
             # Calculate V_{\phi, k}(a, s)
             V, log_probs_k = self.evaluate(batch_obs, batch_done_mask)
 
             # Calculate advantage
-            A_k = batch_rtgs - V.detach()
+            A_k = self._calc_advantages(batch_rews, V, batch_lengths, batch_done_mask)
 
             # Normalize advantage
             A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
@@ -65,8 +65,9 @@ class PPO():
         batch_obs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode, self.observation_space), -1, dtype=torch.float) # Batch Observations. (num_episodes * episode_length, observation_shape)
         batch_log_probs = torch.full(self.episodes_per_batch * self.max_timesteps_per_episode, 0, dtype=torch.float) # (num_episodes * episode_length)
         batch_actions = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode, self.action_space), -1, dtype=torch.float) # (num_episodes * episode_length, action_space)
-        batch_rewards = torch.full(self.episodes_per_batch, self.max_timesteps_per_episode, -float("inf"), dtype=torch.float) # (num episodes, episode_length)
-        batch_rewards_to_go = torch.full(self.episodes_per_batch * self.max_timesteps_per_episode, -float("inf"), dtype=torch.float) # (num_episodes * episode_length)
+        batch_rewards = torch.full(self.episodes_per_batch, self.max_timesteps_per_episode, 0, dtype=torch.float) # (num episodes, episode_length)
+        # batch_values = torch.full(self.episodes_per_batch, self.max_timesteps_per_episode, 0, dtype=torch.float)
+        batch_rewards_to_go = torch.full(self.episodes_per_batch * self.max_timesteps_per_episode, 0, dtype=torch.float) # (num_episodes * episode_length)
         batch_done_mask = torch.full(self.episodes_per_batch * self.max_timesteps_per_episode, False)
         batch_episode_lengths = torch.full(self.episodes_per_batch, 0)
 
@@ -76,15 +77,18 @@ class PPO():
             obs, _ = self.env.reset()
 
             for t_ep in range(self.max_timesteps_per_episode):
-                idx = self.get_batch_idx(e, t_ep) # In order to insert values into flattened tensors immediately
+                idx = self.get_batch_idx(e, t_ep) # In order to insert values into "flattened" tensors immediately
                 batch_done_mask[idx] = True
 
                 batch_obs[idx] = obs
                 pi = self.actor(obs)
                 action, log_prob = self.sample_action(pi)
 
+                ep_v = self.critic(obs)
+
                 batch_actions[idx] = action
                 batch_log_probs[idx] = log_prob
+                # batch_values[idx] = ep_v
 
                 obs, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
@@ -95,8 +99,9 @@ class PPO():
             batch_episode_lengths[e] = t_ep + 1
 
 
-        batch_rewards_to_go = self.calc_rewards_to_go(batch_rewards, batch_episode_lengths)
-        return batch_obs, batch_actions, batch_log_probs, batch_rewards_to_go, batch_episode_lengths, batch_done_mask
+        batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
+        # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)
+        return batch_obs, batch_actions, batch_log_probs, batch_rewards_to_go, batch_rewards, batch_episode_lengths
 
 
     def sample_action(logits):
@@ -105,7 +110,7 @@ class PPO():
         log_prob = pi[a]
         return pi.item(), log_prob.item()
     
-    def calc_rewards_to_go(self, batch_rewards, episode_lengths):
+    def _calc_rewards_to_go(self, batch_rewards, episode_lengths):
         batch_rtgs = torch.full(self.episodes_per_batch * self.max_timesteps_per_episode, -float("inf"), dtype=torch.float)
         for ep_idx in range(self.episodes_per_batch): # Go through last episode first, such that the order in "flattened" batch_rtgs is consistent with episode order
             current_rtg = 0
@@ -117,6 +122,21 @@ class PPO():
 
         return batch_rtgs
     
+    def _calc_advantages(self, rewards, values, episode_lengths, done_mask):
+        """Calculate Generalized Advantage Estimate (GAE), see https://arxiv.org/abs/1506.02438"""
+        advantages = torch.full(self.episodes_per_batch * self.max_timesteps_per_episode, 0, dtype=torch.float)
+        for ep in range(self.episodes_per_batch):
+            length = episode_lengths[ep]
+            last_advantage = 0
+            for t in reversed(range(length)):
+                delta = rewards[t] + self.gamma * values[t+1] * ((t + 1) != length) - values[t] #reward + TD residual, which is V(s_{t+1}) - V(s_{t}), except for the "latest" time step (the first to come, as the steps are inversed)
+                advantage = delta + self.lam * self.gamma * last_advantage
+                last_advantage = advantage
+                advantages[self.get_batch_idx(ep, t)] = advantage
+
+        return advantages[done_mask]
+    
+
     def evaluate(self, batch_obs, valid):
         V = self.cricit(batch_obs).squeeze()
         log_probs = self.actor(batch_obs)
