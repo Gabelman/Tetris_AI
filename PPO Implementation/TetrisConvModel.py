@@ -37,9 +37,9 @@ class TetrisAgent(nn.Module):
         super().__init__()
         kernel_depth = 8  # 8 chosen arbitratily at this point
         board_width, board_height, board_channels = observation_space
-        self.board_embed = InitialImageEmbed(kernel_depth)
+        self.board_embed = InitialImageEmbed(kernel_depth, board_width, board_height, board_channels)
 
-        self.agent_head = nn.Sequential(
+        self.network_head = nn.Sequential(
             nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings
             nn.BatchNorm2d(4),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
@@ -56,5 +56,5 @@ class TetrisAgent(nn.Module):
 
     def forward(self, obs):
         initial_embed = self.board_embed(obs)
-        pi = self.pi_logits(initial_embed)
+        pi = self.network_head(initial_embed)
         return pi
