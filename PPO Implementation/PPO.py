@@ -3,6 +3,7 @@ from torch import nn
 from TetrisConvModel import TetrisAgent
 from torch.distributions import Categorical
 from torch.optim import Adam
+import numpy as np
 
 from gymnasium import Env
 
@@ -32,7 +33,9 @@ class PPO():
         while current_timesteps < total_timesteps:
             batch_num += 1
             batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.sample()
-            current_timesteps += torch.sum(batch_lengths)
+
+            step_sum = torch.sum(batch_lengths)
+            current_timesteps += step_sum
 
             # Calculate V_{\phi, k}(a, s)
             V, _ = self.evaluate(batch_obs, batch_actions, batch_done_mask)
@@ -43,31 +46,44 @@ class PPO():
             # Normalize advantage
             A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
 
+
+            minibatch_size = step_sum // self.num_minibatches # floor division
+            batch_idcs = np.arange(step_sum)
+
             print(f"=============\Iteration: {batch_num}\ncurrent time steps: {current_timesteps}\n=============\n")
             print(f"episodic return: {torch.sum(batch_rews[batch_done_mask])}")
             for i in tqdm(range(self.updates_per_iteration)):
                 self.iteration = i
-                V, log_probs = self.evaluate(batch_obs, batch_actions, batch_done_mask)
+                min_batch_idcs = np.random.choice(batch_idcs, (self.num_minibatches, minibatch_size))
+                for idcs in min_batch_idcs:
+                    mini_obs = batch_obs[idcs]
+                    mini_actions = batch_actions[idcs]
+                    mini_log_probs = batch_log_probs[idcs]
+                    mini_rtgs = batch_rtgs[idcs]
+                    mini_done_mask = batch_done_mask[idcs]
+                    mini_A_k = A_k[idcs]
 
-                # Calculate loss for actor model
-                # \phi_{\theta}(a, s) / \phi_{\theta_{k}}(a, s)
-                prob_ratio = torch.exp(log_probs - batch_log_probs)
-                
-                # surrogate objective see https://spinningup.openai.com/en/latest/algorithms/ppo.html
-                # torch.where: takes a conditional as first param, then the result for true, false. 
-                clip = torch.where(A_k >= 0, torch.min(prob_ratio, torch.tensor(1 + self.epsilon, dtype=prob_ratio.dtype, device=self.device)), torch.max(prob_ratio, torch.tensor(1 - self.epsilon, dtype=prob_ratio.dtype, device=self.device)))
+                    V, log_probs = self.evaluate(mini_obs, mini_actions, mini_done_mask)
 
-                # Calculate Losses
-                actor_loss = (-clip * A_k).mean()
-                critic_loss = nn.MSELoss()(batch_rtgs[batch_done_mask], V)
+                    # Calculate loss for actor model
+                    # \phi_{\theta}(a, s) / \phi_{\theta_{k}}(a, s)
+                    prob_ratio = torch.exp(log_probs - mini_log_probs)
+                    
+                    # surrogate objective see https://spinningup.openai.com/en/latest/algorithms/ppo.html
+                    # torch.where: takes a conditional as first param, then the result for true, false. 
+                    clip = torch.where(mini_A_k >= 0, torch.min(prob_ratio, torch.tensor(1 + self.epsilon, dtype=prob_ratio.dtype, device=self.device)), torch.max(prob_ratio, torch.tensor(1 - self.epsilon, dtype=prob_ratio.dtype, device=self.device)))
+
+                    # Calculate Losses
+                    actor_loss = (-clip * mini_A_k).mean()
+                    critic_loss = nn.MSELoss()(mini_rtgs[mini_done_mask], V)
 
 
-                self.actor_optim.zero_grad()
-                actor_loss.backward(retain_graph=True)
-                self.actor_optim.step()
-                self.critic_optim.zero_grad()
-                critic_loss.backward()
-                self.critic_optim.step()
+                    self.actor_optim.zero_grad()
+                    actor_loss.backward(retain_graph=True)
+                    self.actor_optim.step()
+                    self.critic_optim.zero_grad()
+                    critic_loss.backward()
+                    self.critic_optim.step()
 
 
 
@@ -166,10 +182,11 @@ class PPO():
         """Find index on flattened batch tensors. One batch has {episodes_per_batch} episodes and a total of {episodes_per_batch} * {max_timesteps_per_batch} timesteps."""
         return self.max_timesteps_per_episode * episode + episode_timestep
     
-    def init_hyperparameters(self, episodes_per_batch = 4, max_timesteps_per_episode = 10000, updates_per_iteration = 5, gamma = 0.95, epsilon = 0.2, lam = 0.94, actor_lr = 1e-3, cricit_lr = 1e-3):
+    def init_hyperparameters(self, episodes_per_batch = 4, max_timesteps_per_episode = 10000, updates_per_iteration = 5, num_minibatches = 1, gamma = 0.95, epsilon = 0.2, lam = 0.94, actor_lr = 1e-3, cricit_lr = 1e-3):
         self.episodes_per_batch = episodes_per_batch
         self.max_timesteps_per_episode = max_timesteps_per_episode
         self.updates_per_iteration = updates_per_iteration
+        self.num_minibatches = num_minibatches
 
         self.gamma = gamma # Used in rewards to go
         self.epsilon = epsilon # PPO clipping objective
