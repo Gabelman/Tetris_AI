@@ -16,8 +16,8 @@ class InitialImageEmbed(nn.Module):
         super().__init__()
         # Layers are inspired by: https://github.com/adrien1018/betatetris-tablebase
         self.conv_layer = nn.Conv2d(img_channels, channels, 5, padding=2) # Keeps the size of each embedding, as kernel_size = 5 and padding=2
-        self.conv_vertical = nn.Conv2d(img_channels, channels, (1, H)) # Conv layer that goes through all vertical pixel-lines -> shape: (board_width, 1)
-        self.conv_horizontal = nn.Conv2d(img_channels, channels, (W, 1)) # Conv layer that goes through all horizontal pixel-lines -> shape: (1, board_height)
+        self.conv_vertical = nn.Conv2d(img_channels, channels, (H, 1)) # Conv layer that goes through all vertical pixel-lines -> shape: (board_width, 1)
+        self.conv_horizontal = nn.Conv2d(img_channels, channels, (1, W)) # Conv layer that goes through all horizontal pixel-lines -> shape: (1, board_height)
         self.batch_norm = nn.BatchNorm2d(channels)
         
     def forward(self, obs):
@@ -27,8 +27,8 @@ class InitialImageEmbed(nn.Module):
         horizontal_embed = self.conv_horizontal(obs)
         x = conv_embed + vertical_embed + horizontal_embed # This is allowed and applies addition of shape (1, x) on all values of dimension y in (y, x)
 
-        # Regulation
-        x = self.batch_norm
+        # Regularization
+        x = self.batch_norm(x)
         x = F.relu(x)
         return x
 
@@ -40,11 +40,11 @@ class TetrisAgent(nn.Module):
         self.board_embed = InitialImageEmbed(kernel_depth, board_width, board_height, board_channels)
 
         self.network_head = nn.Sequential(
-            nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings
+            nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings. This may as well be a fully connected linear layer. However, in that case BatchNorm2d couldn't be applied the same way.
             nn.BatchNorm2d(4),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
             nn.ReLU(),
-            nn.Linear(board_height * board_width, output_dim)
+            nn.Linear(4 * board_height * board_width, output_dim)
         )
         # self.value_head = nn.Sequential(
         #     nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings
@@ -56,5 +56,5 @@ class TetrisAgent(nn.Module):
 
     def forward(self, obs):
         initial_embed = self.board_embed(obs)
-        pi = self.network_head(initial_embed)
-        return pi
+        x = self.network_head(initial_embed)
+        return x
