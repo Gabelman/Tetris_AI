@@ -17,8 +17,8 @@ class PPO():
         self.env = env
         self.action_space = env.action_space.n # this is specifically for openAI gymnasium. Might as well be = 5
         self.observation_space = env.observation_space.shape
-        self.actor = TetrisAgent(self.observation_space, self.action_space)
-        self.critic = TetrisAgent(self.observation_space, 1)
+        self.actor = TetrisAgent(self.observation_space, self.action_space).to(device)
+        self.critic = TetrisAgent(self.observation_space, 1).to(device)
         
 
         self.actor_optim = Adam(self.actor.parameters(), lr=self.actor_lr)
@@ -27,14 +27,15 @@ class PPO():
         self.iteration = 0
 
         self.device = device
+        
     def train(self, total_timesteps):
         current_timesteps = 0
-        batch_num = 0
+        self.iteration = 0
         while current_timesteps < total_timesteps:
-            batch_num += 1
+            self.iteration += 1
             batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.sample()
 
-            step_sum = torch.sum(batch_lengths)
+            step_sum = sum(batch_lengths)
             current_timesteps += step_sum
 
             # Calculate V_{\phi, k}(a, s)
@@ -50,10 +51,9 @@ class PPO():
             minibatch_size = step_sum // self.num_minibatches # floor division
             batch_idcs = np.arange(step_sum)
 
-            print(f"=============\Iteration: {batch_num}\ncurrent time steps: {current_timesteps}\n=============\n")
+            print(f"=============\Iteration: {self.iteration}\ncurrent time steps: {current_timesteps}\n=============\n")
             print(f"episodic return: {torch.sum(batch_rews[batch_done_mask])}")
             for i in tqdm(range(self.updates_per_iteration)):
-                self.iteration = i
                 min_batch_idcs = np.random.choice(batch_idcs, (self.num_minibatches, minibatch_size))
                 for idcs in min_batch_idcs:
                     mini_obs = batch_obs[idcs]
@@ -95,7 +95,7 @@ class PPO():
         # batch_values = torch.full(self.episodes_per_batch, self.max_timesteps_per_episode, 0, dtype=torch.float)
         batch_rewards_to_go = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_done_mask = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
-        batch_episode_lengths = torch.full((self.episodes_per_batch,), 0, device=self.device, requires_grad=False)
+        batch_episode_lengths = []
 
         #reshape obs-space from (widht, height, channels) to (channels, height, width) (keeping batch size the same)
         batch_obs = torch.einsum("nwhc->nchw", batch_obs)
@@ -127,7 +127,7 @@ class PPO():
 
                 if done:
                     break
-            batch_episode_lengths[e] = t_ep + 1
+            batch_episode_lengths.append(t_ep + 1)
 
 
         batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
@@ -142,7 +142,7 @@ class PPO():
         return a.item(), log_prob.item()
     
     def _calc_rewards_to_go(self, batch_rewards, episode_lengths):
-        batch_rtgs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), -float("inf"), dtype=torch.float)
+        batch_rtgs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), -float("inf"), device=self.device, dtype=torch.float)
         for ep_idx in range(self.episodes_per_batch): # Go through last episode first, such that the order in "flattened" batch_rtgs is consistent with episode order
             current_rtg = 0
 
@@ -155,7 +155,7 @@ class PPO():
     
     def _calc_advantages(self, rewards, values, episode_lengths, done_mask):
         """Calculate Generalized Advantage Estimate (GAE), see https://arxiv.org/abs/1506.02438"""
-        advantages = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float)
+        advantages = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, device=self.device, dtype=torch.float)
         for ep in range(self.episodes_per_batch):
             length = episode_lengths[ep]
             last_advantage = 0
