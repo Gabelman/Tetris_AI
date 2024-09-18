@@ -56,5 +56,6 @@ class TetrisAgent(nn.Module):
 
     def forward(self, obs):
         initial_embed = self.board_embed(obs)
-        x = self.network_head(initial_embed)
-        return x
+        pi = self.network_head(initial_embed)
+        # v = self.value_head(initial_embed)
+        return pi

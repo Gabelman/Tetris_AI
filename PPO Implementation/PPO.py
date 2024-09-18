@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from generator import Generator
 from TetrisConvModel import TetrisAgent
 from torch.distributions import Categorical
 from torch.optim import Adam
@@ -19,8 +20,9 @@ class PPO():
         self.observation_space = env.observation_space.shape
         self.actor = TetrisAgent(self.observation_space, self.action_space).to(device)
         self.critic = TetrisAgent(self.observation_space, 1).to(device)
+        # self.tetris_model = TetrisAgent(self.observation_space, self.action_space).to(device)
         
-
+        self.generator = Generator(observation_space=self.observation_space, max_timesteps_per_episode=self.max_timesteps_per_episode,num_environments=self.episodes_per_batch, gamma=self.gamma)
         self.actor_optim = Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optim = Adam(self.critic.parameters(), lr=self.cricit_lr)
 
@@ -33,7 +35,7 @@ class PPO():
         self.iteration = 0
         while current_timesteps < total_timesteps:
             self.iteration += 1
-            batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.sample()
+            batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.generator.sample(self.actor)
 
             step_sum = sum(batch_lengths)
             current_timesteps += step_sum
@@ -87,71 +89,71 @@ class PPO():
 
 
 
-    def sample(self):
-        batch_obs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
-        batch_log_probs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
-        batch_actions = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), -1, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space)
-        batch_rewards = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num episodes, episode_length)
-        # batch_values = torch.full(self.episodes_per_batch, self.max_timesteps_per_episode, 0, dtype=torch.float)
-        batch_rewards_to_go = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
-        batch_done_mask = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
-        batch_episode_lengths = []
+    # def sample(self):
+    #     batch_obs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
+    #     batch_log_probs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
+    #     batch_actions = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), -1, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space)
+    #     batch_rewards = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num episodes, episode_length)
+    #     # batch_values = torch.full(self.episodes_per_batch, self.max_timesteps_per_episode, 0, dtype=torch.float)
+    #     batch_rewards_to_go = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
+    #     batch_done_mask = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
+    #     batch_episode_lengths = []
 
-        #reshape obs-space from (widht, height, channels) to (channels, height, width) (keeping batch size the same)
-        batch_obs = torch.einsum("nwhc->nchw", batch_obs)
-        print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
-        for e in tqdm(range(self.episodes_per_batch)):
-            done = False
-            obs, _ = self.env.reset()
+    #     #reshape obs-space from (widht, height, channels) to (channels, height, width) (keeping batch size the same)
+    #     batch_obs = torch.einsum("nwhc->nchw", batch_obs)
+    #     print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
+    #     for e in tqdm(range(self.episodes_per_batch)):
+    #         done = False
+    #         obs, _ = self.env.reset()
 
-            for t_ep in tqdm(range(self.max_timesteps_per_episode)):
-                idx = self.get_batch_idx(e, t_ep) # In order to insert values into "flattened" tensors immediately
-                batch_done_mask[idx] = True
+    #         for t_ep in tqdm(range(self.max_timesteps_per_episode)):
+    #             idx = self.get_batch_idx(e, t_ep) # In order to insert values into "flattened" tensors immediately
+    #             batch_done_mask[idx] = True
 
-                obs = torch.tensor(obs).to(self.device, dtype=torch.float)
-                obs = torch.einsum("ijk->kji", obs) # Change to shape: (channels, H, W)
-                batch_obs[idx,:,:,:] = obs
-                pi = self.actor(obs.unsqueeze(0))
-                action, log_prob = self.sample_action(pi)
+    #             obs = torch.tensor(obs).to(self.device, dtype=torch.float)
+    #             obs = torch.einsum("ijk->kji", obs) # Change to shape: (channels, H, W)
+    #             batch_obs[idx,:,:,:] = obs
+    #             pi = self.actor(obs.unsqueeze(0))
+    #             action, log_prob = self.sample_action(pi)
 
-                # ep_v = self.critic(obs)
+    #             # ep_v = self.critic(obs)
 
-                batch_actions[idx] = action
-                batch_log_probs[idx] = log_prob
-                # batch_values[idx] = ep_v
+    #             batch_actions[idx] = action
+    #             batch_log_probs[idx] = log_prob
+    #             # batch_values[idx] = ep_v
 
-                obs, reward, terminated, truncated, _ = self.env.step(action)
-                done = terminated or truncated
+    #             obs, reward, terminated, truncated, _ = self.env.step(action)
+    #             done = terminated or truncated
 
-                batch_rewards[idx] = reward
+    #             batch_rewards[idx] = reward
 
-                if done:
-                    break
-            batch_episode_lengths.append(t_ep + 1)
+    #             if done:
+    #                 break
+    #         batch_episode_lengths.append(t_ep + 1)
 
 
-        batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
-        # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)
-        return batch_obs, batch_actions, batch_log_probs, batch_rewards_to_go, batch_rewards, batch_episode_lengths, batch_done_mask
+    #     batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
+    #     # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)
+    #     return batch_obs, batch_actions, batch_log_probs, batch_rewards_to_go, batch_rewards, batch_episode_lengths, batch_done_mask
 
-    @staticmethod
-    def sample_action(logits):
-        pi = Categorical(logits=logits)
-        a = pi.sample()
-        log_prob = pi.logits.squeeze()[a]
-        return a.item(), log_prob.item()
+    # @staticmethod
+    # def sample_action(logits):
+    #     pi = Categorical(logits=logits)
+    #     a = pi.sample()
+    #     log_prob = pi.logits.squeeze()[a]
+    #     return a.item(), log_prob.item()
     
-    def _calc_rewards_to_go(self, batch_rewards, episode_lengths):
-        batch_rtgs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), -float("inf"), device=self.device, dtype=torch.float)
-        for ep_idx in range(self.episodes_per_batch): # Go through last episode first, such that the order in "flattened" batch_rtgs is consistent with episode order
-            current_rtg = 0
+    # def _calc_rewards_to_go(self, batch_rewards, episode_lengths):
+    #     batch_rtgs = torch.full((self.episodes_per_batch * self.max_timesteps_per_episode,), -float("inf"), device=self.device, dtype=torch.float)
+    #     for ep_idx in range(self.episodes_per_batch): # Go through last episode first, such that the order in "flattened" batch_rtgs is consistent with episode order
+    #         current_rtg = 0
 
-            for t_ep in reversed(range(episode_lengths[ep_idx])): # Go back in time: approximation for Q(a, s), through Bellman equation, which is r(a, s) + \gamma Q(a', s')
-                current_idx = self.get_batch_idx(ep_idx, t_ep)
-                rtg = batch_rewards[current_idx] + self.gamma * current_rtg
-                batch_rtgs[current_idx] = rtg
+    #         for t_ep in reversed(range(episode_lengths[ep_idx])): # Go back in time: approximation for Q(a, s), through Bellman equation, which is r(a, s) + \gamma Q(a', s')
+    #             current_idx = self.get_batch_idx(ep_idx, t_ep)
+    #             rtg = batch_rewards[current_idx] + self.gamma * current_rtg
+    #             batch_rtgs[current_idx] = rtg
 
-        return batch_rtgs
+    #     return batch_rtgs
     
     def _calc_advantages(self, rewards, values, episode_lengths, done_mask):
         """Calculate Generalized Advantage Estimate (GAE), see https://arxiv.org/abs/1506.02438"""
@@ -178,9 +180,9 @@ class PPO():
         log_probs = log_probs[torch.arange(log_probs.size(0)), batch_acts] # select only probs of actions taken. torch.arange(...) selects all rows, batch_acts selects the appropriate actions for each row (timestep over different episodes).
         return V[valid], log_probs[valid]
 
-    def get_batch_idx(self, episode, episode_timestep): # timestep starting from 0
-        """Find index on flattened batch tensors. One batch has {episodes_per_batch} episodes and a total of {episodes_per_batch} * {max_timesteps_per_batch} timesteps."""
-        return self.max_timesteps_per_episode * episode + episode_timestep
+    # def get_batch_idx(self, episode, episode_timestep): # timestep starting from 0
+    #     """Find index on flattened batch tensors. One batch has {episodes_per_batch} episodes and a total of {episodes_per_batch} * {max_timesteps_per_batch} timesteps."""
+    #     return self.max_timesteps_per_episode * episode + episode_timestep
     
     def init_hyperparameters(self, episodes_per_batch = 4, max_timesteps_per_episode = 10000, updates_per_iteration = 5, num_minibatches = 1, gamma = 0.95, epsilon = 0.2, lam = 0.94, actor_lr = 1e-3, cricit_lr = 1e-3):
         self.episodes_per_batch = episodes_per_batch
