@@ -8,15 +8,17 @@ from utils import get_batch_idx
 from TetrisConvModel import TetrisAgent
 
 class Generator():
-    def __init__(self, num_environments, max_timesteps_per_episode, gamma):
+    def __init__(self, num_environments, max_timesteps_per_episode, device, gamma):
         self.max_timesteps_per_episode = max_timesteps_per_episode
         self.num_environments = num_environments
-        self.environments_done = [True for _ in range(num_environments)]
-        self.last_observations = []
         self.environments = [gym.make("ALE/Tetris-v5") for _ in range(num_environments)]
+        self.last_observations = [env.reset()[0] for env in self.environments]
+        self.environments_done = [False for _ in range(num_environments)]
+
+
         self.action_space = self.environments[0].action_space.n # this is specifically for openAI gymnasium. Might as well be = 5
         self.observation_space = self.environments[0].observation_space.shape
-
+        self.device = device
         self.gamma = gamma # reward calculation
 
     def sample(self, model: TetrisAgent):
@@ -41,8 +43,7 @@ class Generator():
                 obs = self.last_observations[i]
 
             for t_ep in tqdm(range(self.max_timesteps_per_episode)):
-                self.last_observations[i] = obs
-                idx = get_batch_idx(i, t_ep) # In order to insert values into "flattened" tensors immediately
+                idx = get_batch_idx(self.max_timesteps_per_episode, i, t_ep) # In order to insert values into "flattened" tensors immediately
                 with torch.no_grad():
                     batch_done_mask[idx] = True
 
@@ -64,6 +65,7 @@ class Generator():
 
                     batch_rewards[idx] = reward
 
+                self.last_observations[i] = obs
                 if self.environments_done[i]:
                     break
             batch_episode_lengths.append(t_ep + 1)
@@ -80,7 +82,7 @@ class Generator():
             current_rtg = 0
 
             for t_ep in reversed(range(episode_lengths[ep_idx])): # Go back in time: approximation for Q(a, s), through Bellman equation, which is r(a, s) + \gamma Q(a', s')
-                current_idx = self.get_batch_idx(ep_idx, t_ep)
+                current_idx = get_batch_idx(self.max_timesteps_per_episode, ep_idx, t_ep)
                 rtg = batch_rewards[current_idx] + self.gamma * current_rtg
                 batch_rtgs[current_idx] = rtg
 

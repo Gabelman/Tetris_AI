@@ -36,22 +36,23 @@ class TetrisAgent(nn.Module):
     def __init__(self, observation_space, output_dim):
         super().__init__()
         kernel_depth = 8  # 8 chosen arbitratily at this point
+        kernel_depth2 = 4
         board_width, board_height, board_channels = observation_space
         self.board_embed = InitialImageEmbed(kernel_depth, board_width, board_height, board_channels)
 
         self.network_head = nn.Sequential(
-            nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings. This may as well be a fully connected linear layer. However, in that case BatchNorm2d couldn't be applied the same way.
-            nn.BatchNorm2d(4),
+            nn.Conv2d(kernel_depth, kernel_depth2, 1), # Sum over Embeddings. This may as well be a fully connected linear layer. However, in that case BatchNorm2d couldn't be applied the same way.
+            nn.BatchNorm2d(kernel_depth2),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
             nn.ReLU(),
-            nn.Linear(4 * board_height * board_width, output_dim)
+            nn.Linear(kernel_depth2 * board_height * board_width, output_dim)
         )
         self.value_head = nn.Sequential(
-            nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings
-            nn.BatchNorm2d(4),
+            nn.Conv2d(kernel_depth, kernel_depth2, 1), # Sum over Embeddings
+            nn.BatchNorm2d(kernel_depth2),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
             nn.ReLU(),
-            nn.Linear(board_height * board_width, 1)
+            nn.Linear(kernel_depth2 * board_height * board_width, 1)
         )
 
     def forward(self, obs):

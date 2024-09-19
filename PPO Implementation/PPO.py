@@ -8,18 +8,20 @@ import numpy as np
 from gymnasium import Env
 
 from tqdm import tqdm
-import wandb
+# import wandb
 
 from generator import Generator
 from TetrisConvModel import TetrisAgent
 from utils import get_batch_idx
+from config import Config
 
 class PPO():
-    def __init__(self, device) -> None:
-        self.init_hyperparameters()
+    def __init__(self, device, config: Config) -> None:
+        self.init_hyperparameters(config)
+        self.config=config
 
         
-        self.generator = Generator(max_timesteps_per_episode=self.max_timesteps_per_episode, num_environments=self.episodes_per_batch, gamma=self.gamma)
+        self.generator = Generator(max_timesteps_per_episode=self.max_timesteps_per_episode, num_environments=self.episodes_per_batch, device=device, gamma=self.gamma)
         self.tetris_model = TetrisAgent(self.generator.get_observation_space(), self.generator.get_action_space()).to(device)
         
         self.optim = Adam(self.tetris_model.parameters(), lr=self.lr)
@@ -60,6 +62,8 @@ class PPO():
             for _ in tqdm(range(self.updates_per_iteration)):
                 update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size))
                 for update_idcs in update_batch_idcs:
+                    self.optim.zero_grad()
+
                     for start in range(0, self.update_size, self.mini_batch_size):
                         end = start + self.mini_batch_size
                         idcs = update_idcs[start:end]
@@ -71,6 +75,7 @@ class PPO():
                         mini_done_mask = batch_done_mask[idcs]
                         mini_A_k = A_k[idcs]
 
+                        # with autocast(device_type='cuda', dtype=torch.float16):
                         V, log_probs = self.evaluate(mini_obs, mini_actions)
 
                         V = V[mini_done_mask]
@@ -98,7 +103,6 @@ class PPO():
                         self.scaler.scale(loss).backward()
                     
 
-                    self.optim.zero_grad()
                     self.scaler.unscale_(self.optim)
                     torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
                     
@@ -121,7 +125,7 @@ class PPO():
             length = episode_lengths[ep]
             last_advantage = 0
             for t in reversed(range(length)):
-                idx_t = get_batch_idx(ep, t)
+                idx_t = get_batch_idx(self.max_timesteps_per_episode, ep, t)
                 if t+1 == length:
                     delta = rewards[idx_t] - values[idx_t]
                 else:
@@ -142,7 +146,7 @@ class PPO():
         return v, pi
 
     
-    def init_hyperparameters(self, episodes_per_batch = 128, max_timesteps_per_episode = 200, updates_per_iteration = 1, num_mini_batch_updates = 16, num_sub_mini_batches = 4, gamma = 0.95, epsilon = 0.2, lam = 0.94, lr = 1e-3):
+    def init_hyperparameters(self, config: Config):
         """
         Hyperparameters for the learning process.
         Parameters:
@@ -157,20 +161,20 @@ class PPO():
         A sub-mini-batch (that will be passed in the model) will have the shape: (episodes_per_batch * max_timestpes_per_episode / (num_mini_batch_updates * num_sub_min_batches), *(obs)).
         Sizes are rounded down. In order to avoid index-error, (episodes_per_batch * max_timesteps_per_episode) % (num_mini_batch_updates * num_sub_min_batches) should be = 0.
         """
-        assert((episodes_per_batch * max_timesteps_per_episode) % (num_mini_batch_updates * num_sub_mini_batches) == 0)
-        self.episodes_per_batch = episodes_per_batch
-        self.max_timesteps_per_episode = max_timesteps_per_episode
-        self.updates_per_iteration = updates_per_iteration 
-        self.num_mini_batch_updates = num_mini_batch_updates # updates per batch
-        self.num_sub_mini_batches = num_sub_mini_batches # To control memory usage
+        assert(((config.episodes_per_batch * config.max_timesteps_per_episode) % (config.num_mini_batch_updates * config.num_sub_mini_batches)) == 0)
+        self.episodes_per_batch = config.episodes_per_batch
+        self.max_timesteps_per_episode = config.max_timesteps_per_episode
+        self.updates_per_iteration = config.updates_per_iteration 
+        self.num_mini_batch_updates = config.num_mini_batch_updates # updates per batch
+        self.num_sub_mini_batches = config.num_sub_mini_batches # To control memory usage
 
-        self.gamma = gamma # Used in rewards to go
-        self.epsilon = epsilon # PPO clipping objective
-        self.lam = lam# value is following https://arxiv.org/abs/1506.0243
+        self.gamma = config.gamma # Used in rewards to go
+        self.epsilon = config.epsilon # PPO clipping objective
+        self.lam = config.lam# value is following https://arxiv.org/abs/1506.0243
 
         # self.actor_lr = actor_lr
         # self.critic_lr = cricit_lr
-        self.lr = lr
+        self.lr = config.lr
 
     def close(self):
         self.generator.close()
