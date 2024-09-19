@@ -4,18 +4,22 @@ import gymnasium as gym
 
 from torch.distributions import Categorical
 
+from utils import get_batch_idx
+from TetrisConvModel import TetrisAgent
+
 class Generator():
-    def __init__(self, num_environments, max_timesteps_per_episode, observation_space, gamma):
-        self.observation_space = observation_space
+    def __init__(self, num_environments, max_timesteps_per_episode, gamma):
         self.max_timesteps_per_episode = max_timesteps_per_episode
         self.num_environments = num_environments
-        self.environments = [gym.make("ALE/Tetris-v5") for _ in range(num_environments)]
         self.environments_done = [True for _ in range(num_environments)]
         self.last_observations = []
+        self.environments = [gym.make("ALE/Tetris-v5") for _ in range(num_environments)]
+        self.action_space = self.environments[0].action_space.n # this is specifically for openAI gymnasium. Might as well be = 5
+        self.observation_space = self.environments[0].observation_space.shape
 
         self.gamma = gamma # reward calculation
 
-    def sample(self, model):
+    def sample(self, model: TetrisAgent):
         batch_obs = torch.full((self.num_environments * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
         batch_log_probs = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_actions = torch.full((self.num_environments * self.max_timesteps_per_episode,), -1, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space)
@@ -38,23 +42,24 @@ class Generator():
 
             for t_ep in tqdm(range(self.max_timesteps_per_episode)):
                 self.last_observations[i] = obs
-                idx = self.get_batch_idx(i, t_ep) # In order to insert values into "flattened" tensors immediately
+                idx = get_batch_idx(i, t_ep) # In order to insert values into "flattened" tensors immediately
                 with torch.no_grad():
                     batch_done_mask[idx] = True
 
+                    # Change obs shape to: (channels, H, W), which is needed for conv-layers
                     obs = torch.tensor(obs).to(self.device, dtype=torch.float)
-                    obs = torch.einsum("ijk->kji", obs) # Change to shape: (channels, H, W)
+                    obs = torch.einsum("ijk->kji", obs) 
                     batch_obs[idx,:,:,:] = obs
-                    pi = model(obs.unsqueeze(0))
+
+                    obs = obs.unsqueeze(0) # batch_size (N) = 1
+                    pi = model.get_pis(obs)
                     action, log_prob = self.sample_action(pi)
 
-                    # ep_v = self.critic(obs)
 
                     batch_actions[idx] = action
                     batch_log_probs[idx] = log_prob
-                    # batch_values[idx] = ep_v
 
-                    obs, reward, terminated, truncated, _ = self.env.step(action)
+                    obs, reward, terminated, truncated, _ = current_env.step(action)
                     self.environments_done[i] = terminated or truncated
 
                     batch_rewards[idx] = reward
@@ -81,13 +86,19 @@ class Generator():
 
         return batch_rtgs
     
-    def get_batch_idx(self, episode, episode_timestep): # timestep starting from 0
-        """Find index on flattened batch tensors. One batch has {episodes_per_batch} episodes and a total of {episodes_per_batch} * {max_timesteps_per_batch} timesteps."""
-        return self.max_timesteps_per_episode * episode + episode_timestep
+    def get_action_space(self):
+        return self.action_space
     
+    def get_observation_space(self):
+        return self.observation_space
+
     @staticmethod
     def sample_action(logits):
         pi = Categorical(logits=logits)
         a = pi.sample()
         log_prob = pi.logits.squeeze()[a]
         return a.item(), log_prob.item()
+
+    def close(self):
+        for e in self.environments:
+            e.close()

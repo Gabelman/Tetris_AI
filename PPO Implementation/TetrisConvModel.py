@@ -46,16 +46,21 @@ class TetrisAgent(nn.Module):
             nn.ReLU(),
             nn.Linear(4 * board_height * board_width, output_dim)
         )
-        # self.value_head = nn.Sequential(
-        #     nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings
-        #     nn.BatchNorm2d(4),
-        #     nn.Flatten(), # Flatten shape (board_width, board_height, 1)
-        #     nn.ReLU(),
-        #     nn.Linear(board_height * board_width, 1)
-        # )
+        self.value_head = nn.Sequential(
+            nn.Conv2d(kernel_depth, 4, 1), # Sum over Embeddings
+            nn.BatchNorm2d(4),
+            nn.Flatten(), # Flatten shape (board_width, board_height, 1)
+            nn.ReLU(),
+            nn.Linear(board_height * board_width, 1)
+        )
 
     def forward(self, obs):
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
-        # v = self.value_head(initial_embed)
+        v = self.value_head(initial_embed)
+        return pi, v
+    
+    def get_pis(self, obs):
+        initial_embed = self.board_embed(obs)
+        pi = self.network_head(initial_embed)
         return pi
