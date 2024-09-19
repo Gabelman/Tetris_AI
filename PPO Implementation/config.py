@@ -1,10 +1,10 @@
 class Config():
     def __init__(self):
         # learning params
-        self.episodes_per_batch = 1
+        self.episodes_per_batch = 32
         self.max_timesteps_per_episode = 200
         self.updates_per_iteration = 1
-        self.num_mini_batch_updates = 10
+        self.num_mini_batch_updates = 8
         self.num_sub_mini_batches = 4
 
         self.overall_timesteps = 10000

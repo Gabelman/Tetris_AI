@@ -21,6 +21,9 @@ class Generator():
         self.device = device
         self.gamma = gamma # reward calculation
 
+
+        self.step_reward = 1e-1
+
     def sample(self, model: TetrisAgent):
         batch_obs = torch.full((self.num_environments * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
         batch_log_probs = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
@@ -63,7 +66,7 @@ class Generator():
                     obs, reward, terminated, truncated, _ = current_env.step(action)
                     self.environments_done[i] = terminated or truncated
 
-                    batch_rewards[idx] = reward
+                    batch_rewards[idx] = reward + self.step_reward
 
                 self.last_observations[i] = obs
                 if self.environments_done[i]:

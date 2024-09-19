@@ -44,14 +44,15 @@ class PPO():
             step_sum = sum(batch_lengths)
             current_timesteps += step_sum
 
-            # Calculate V_{\phi, k}(a, s)
-            V, _ = self.evaluate(batch_obs, batch_actions)
+            with torch.no_grad():
+                # Calculate V_{\phi,    k}(a, s)
+                V, _ = self.evaluate(batch_obs, batch_actions)
 
-            # Calculate advantage
-            A_k = self._calc_advantages(batch_rews, V.detach(), batch_lengths)
+                # Calculate advantage
+                A_k = self._calc_advantages(batch_rews, V.detach(), batch_lengths)
 
-            # Normalize advantage
-            A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
+                # Normalize advantage
+                A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
 
 
             # update_size = step_sum // self.num_mini_batch_updates # floor division
@@ -98,9 +99,9 @@ class PPO():
 
                         loss = actor_loss  + value_loss # maximize actor_loss and minimize value_loss
 
-                        loss /= self.num_mini_batch_updates
+                        loss /= self.num_sub_mini_batches
 
-                        self.scaler.scale(loss).backward()
+                        self.scaler.scale(loss).backward(retain_graph=False)
                     
 
                     self.scaler.unscale_(self.optim)
