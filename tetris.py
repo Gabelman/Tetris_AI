@@ -10,9 +10,10 @@ class Actions(Enum):
     NoAction = 0
     MoveLeft = 1
     MoveRight = 2
-    MoveDown = 3
-    RotateClock = 4
-    RotateCClock = 5
+    RotateClock = 3
+    RotateCClock = 4
+    MoveDown = 5
+
 
 
 # Colors
@@ -53,11 +54,7 @@ class Tetromino:
     def rotate(self, clockwise=True):
         if len(self.shape) == 2 and len(self.shape[0]) == 2:  # O piece doesn't rotate
             return
-
-        # original_x = self.x
-        # original_y = self.y
-        # original_shape = self.shape
-
+        
         # Perform rotation
         if clockwise:
             rotated = [list(row) for row in zip(*self.shape[::-1])]  # Clockwise rotation
@@ -65,14 +62,7 @@ class Tetromino:
             inverted_rows = [row[::-1] for row in self.shape]
             rotated = [list(row) for row in zip(*inverted_rows)]
         
-        # Check if rotation is possible
         self.shape = rotated
-        # if self.collision(grid):
-        #     # If collision occurs, revert the rotation
-        #     self.shape = original_shape
-        #     self.x = original_x
-        #     self.y = original_y
-        # else:
         self.rotation_state = (self.rotation_state + 1) % 4
 
     def is_colliding(self, grid, offset=(0, 0)):
@@ -136,9 +126,6 @@ class PygameTetris(Env):
         terminated = False
         # truncated = False
 
-        # Reward values
-        lines_cleared = 0
-        height_placed = 0
 
         #TODO: Action penalty?
         # reward -= self.action_penalty
@@ -146,7 +133,7 @@ class PygameTetris(Env):
         #     reward += self.action_penalty
         
         if not self.apply_action(action):
-            reward -= 100
+            reward -= 50
 
         if self.current_tetromino.is_colliding(self.static_grid, (1, 0)):
             self.update_grid(self.static_grid, self.current_tetromino, None)
@@ -158,11 +145,12 @@ class PygameTetris(Env):
 
             self.update_grid(self.grid, self.current_tetromino, None)
 
-            if self.check_game_over(self.static_grid, self.current_tetromino):
+            if self.check_game_over(self.current_tetromino):
                 print("Game Over!")
                 terminated = True
                 reward -= 500
                 return obs, reward, terminated
+            reward += self.calculate_reward(lines_cleared, height_placed)
         else:
             tetromino_to_remove = copy.deepcopy(self.current_tetromino)
             self.current_tetromino.move_down()
@@ -171,7 +159,6 @@ class PygameTetris(Env):
 
         
         reward += self.step_reward
-        reward += self.calculate_reward(lines_cleared, height_placed)
 
 
         self.render_screen()
@@ -223,6 +210,7 @@ class PygameTetris(Env):
         return True
     
     def update_grid(self, grid, new_tetromino: Tetromino, remove_tetromino: Tetromino):
+        """Update the information in each cell. Removes the content of remove_tetronimo, before the content of new_tetronimo is put in the grid."""
         if remove_tetromino:
             for y, row in enumerate(remove_tetromino.shape):
                 for x, cell in enumerate(row):
@@ -252,6 +240,9 @@ class PygameTetris(Env):
         return reward
 
     def clear_lines(self):
+        """
+        Goes through all lines in static_grid and grid and clears them if they are full.
+        """
         full_rows = [i for i, row in enumerate(self.grid) if all(row)]
         for i in full_rows:
             del self.grid[i]
@@ -260,8 +251,9 @@ class PygameTetris(Env):
             self.static_grid.insert(0, [0 for _ in range(self.COLUMNS)])
         return len(full_rows)
 
-    def check_game_over(self, grid, tetromino: Tetromino):
-        return tetromino.is_colliding(grid, offset=(0, 0))
+    def check_game_over(self, tetromino: Tetromino):
+        """**This method must be called immediately after a new tile has spawned.** It checks on the static_grid whether there is a collision immediately after spawning."""
+        return tetromino.is_colliding(self.static_grid, offset=(0, 0))
 
 
     def calculate_bumpiness(self, grid) -> int:
@@ -280,7 +272,19 @@ class PygameTetris(Env):
         return bumpiness
 
     def count_holes(self, grid) -> int:
-        """Returns the amount of holes."""
+        """
+        Returns the amount of holes. Holes are defined as follows:\n
+        - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
+        - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells.
+
+        **Examples:**\n
+        [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
+        [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
+        [0,0,0,1,0,0]    [0,0,0,1,0,0]\n
+        [0,0,1,0,1,1]    [0,0,1,0,1,0]\n
+        [0,0,1,0,0,0]    [0,0,1,0,0,0]\n
+        The left example has 4 holes, whereas the right example only 1. In the right example, the cell at (5, 5) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
+        """
         holes_table = self.generate_grid()
         hole_count = 0
         for row in range(self.ROWS):
@@ -338,6 +342,7 @@ class PygameTetris(Env):
             pygame.draw.line(self.screen, GRAY, (0, y * self.GRID_SIZE), (self.SCREEN_WIDTH - self.PREVIEW_WIDTH, y * self.GRID_SIZE))
 
     def render_screen(self):
+        """Resets the screen. Then draws the grid, including the current running tile. TODO: Color current running tile differently. Then draws the next tile."""
         self._reset_screen()
         # self.current_tetromino.draw(self.screen)
         for y in range(self.ROWS):
