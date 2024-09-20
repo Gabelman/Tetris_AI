@@ -323,9 +323,9 @@ def train_ai(continue_training=False):
     agent.save_memory()
 
 def play_ai(human_player=True):
-    game = PygameTetris(0, render=True, scale=6)
-    FPS = 5
-    # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    game = PygameTetris(0, discrete_obs=False, render=True, scale=6)
+    FPS = 64
+
     clock = pygame.time.Clock()
 
     obs = game.reset()
@@ -337,13 +337,12 @@ def play_ai(human_player=True):
         agent = DQNAgent()
         agent.model = ai_model
 
-    # grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
-    # current_tetromino = Tetromino(random.choice(SHAPES))
-    # next_tetromino = Tetromino(random.choice(SHAPES))
     running = True
     clock.tick(FPS)
+    frame_count = 0
 
     while running:
+        frame_count += 1
         action = Actions.NoAction
         if human_player:
             for event in pygame.event.get():
@@ -360,12 +359,21 @@ def play_ai(human_player=True):
                         action = Actions.RotateClock
                     elif event.key == pygame.K_q:
                         action = Actions.RotateCClock
+                    elif event.key == pygame.K_DOWN:
+                        action = Actions.MoveDown
+                    game.apply_action(action)
+                    game.render_screen()
         else:
             # state = agent.get_state(grid, current_tetromino)
             # action = agent.act(state)
             pass
+        
+        if frame_count % (FPS * 3) == 0:
+            obs, reward, terminated = game.step(action)
+            print("obs: ")
+            print(obs)
+            print(f"reward: {reward}")
 
-        obs, reward, terminated = game.step(action)
 
         clock.tick(FPS)  # Slower speed to observe AI's moves
 

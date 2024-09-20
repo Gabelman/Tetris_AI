@@ -10,8 +10,10 @@ class Actions(Enum):
     NoAction = 0
     MoveLeft = 1
     MoveRight = 2
-    RotateClock = 3
-    RotateCClock = 4
+    MoveDown = 3
+    RotateClock = 4
+    RotateCClock = 5
+
 
 # Colors
 BLACK = (0, 0, 0)
@@ -101,6 +103,7 @@ class Tetromino:
 
 
 
+
 class PygameTetris(Env):
     def __init__(self, seed, discrete_obs=True, render=False, scale=1):
         self._init_rewards()
@@ -155,7 +158,7 @@ class PygameTetris(Env):
 
             self.update_grid(self.grid, self.current_tetromino, None)
 
-            if self.check_game_over(self.grid, self.current_tetromino):
+            if self.check_game_over(self.static_grid, self.current_tetromino):
                 print("Game Over!")
                 terminated = True
                 reward -= 500
@@ -199,6 +202,11 @@ class PygameTetris(Env):
             self.current_tetromino.x += 1
             if self.current_tetromino.is_colliding(self.static_grid):
                 self.current_tetromino.x -= 1
+                return False
+        elif action == Actions.MoveDown:  # Move right
+            self.current_tetromino.y += 1
+            if self.current_tetromino.is_colliding(self.static_grid):
+                self.current_tetromino.y -= 1
                 return False
         elif action == Actions.RotateClock:  # Rotate clockwise
             self.current_tetromino.rotate()
