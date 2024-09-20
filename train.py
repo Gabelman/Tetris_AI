@@ -322,16 +322,18 @@ def train_ai(continue_training=False):
     torch.save(agent.model.state_dict(), "tetris_ai_model.pth")
     agent.save_memory()
 
-def play_ai():
-    game = PygameTetris(0)
+def play_ai(human_player=True):
+    game = PygameTetris(0, render=True)
     # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
 
-    ai_model = TetrisAI()
-    ai_model.load_state_dict(torch.load("tetris_ai_model.pth"))
-    ai_model.eval()
-    agent = DQNAgent()
-    agent.model = ai_model
+    if not human_player:
+
+        ai_model = TetrisAI()
+        ai_model.load_state_dict(torch.load("tetris_ai_model.pth"))
+        ai_model.eval()
+        agent = DQNAgent()
+        agent.model = ai_model
 
     # grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
     # current_tetromino = Tetromino(random.choice(SHAPES))
@@ -339,13 +341,13 @@ def play_ai():
     running = True
 
     while running:
-        screen.fill(BLACK)
+        # screen.fill(BLACK)
 
         # Draw gray grid lines
-        for x in range(COLUMNS + 1):
-            pygame.draw.line(screen, GRAY, (x * GRID_SIZE, 0), (x * GRID_SIZE, SCREEN_HEIGHT))
-        for y in range(ROWS + 1):
-            pygame.draw.line(screen, GRAY, (0, y * GRID_SIZE), (SCREEN_WIDTH - PREVIEW_WIDTH, y * GRID_SIZE))
+        # for x in range(COLUMNS + 1):
+        #     pygame.draw.line(screen, GRAY, (x * GRID_SIZE, 0), (x * GRID_SIZE, SCREEN_HEIGHT))
+        # for y in range(ROWS + 1):
+        #     pygame.draw.line(screen, GRAY, (0, y * GRID_SIZE), (SCREEN_WIDTH - PREVIEW_WIDTH, y * GRID_SIZE))
         
         state = agent.get_state(grid, current_tetromino)
         action = agent.act(state)

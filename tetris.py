@@ -27,6 +27,12 @@ SHAPES = [
     [[1, 0, 0], [1, 1, 1]],  # J
     [[0, 0, 1], [1, 1, 1]]  # L
 ]
+def shape_to_numpy(shape):
+    ret_shape = np.zeros((2,4)) # padding to maximum shape
+    for row in range(len(shape)):
+        for col in range(len(shape[row])):
+            ret_shape[row][col] = shape[row][col]
+    return ret_shape
 
 class Tetromino:
     def __init__(self, shape, grid_shape: tuple[int, int]): # grid_size: (height, width)
@@ -183,7 +189,7 @@ class PygameTetris(Env):
         self.ROWS = 20
         self.GRID_SIZE = 5 * self.SCALE
 
-        self.grid = [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
+        self.grid = self.generate_grid()
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
@@ -191,7 +197,7 @@ class PygameTetris(Env):
 
     
     def step(self, action: Actions):
-        self.reset_screen()
+        # self.reset_screen()
         
         # Return values
         obs = pygame.surfarray.array3d(self.screen)
@@ -223,9 +229,9 @@ class PygameTetris(Env):
                 reward -= 500
                 return obs, reward, terminated
         else:
-            tetronimo_to_remove = copy.deepcopy(self.current_tetromino)
+            tetromino_to_remove = copy.deepcopy(self.current_tetromino)
             self.current_tetromino.move_down()
-            self.update_grid(self.current_tetromino, tetronimo_to_remove)
+            self.update_grid(self.current_tetromino, tetromino_to_remove)
 
 
         
@@ -234,14 +240,19 @@ class PygameTetris(Env):
 
 
         self.render_screen()
-        obs = pygame.surfarray.array3d(self.screen)
-        if self.discrete_obs:
-            obs = self.grid
+        obs = self._get_observation()
+
         return obs, reward, terminated
 
     def reset(self):
-        self.grid = [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
+        self.grid = self.generate_grid()
+        self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
+        self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
+        self.update_grid(self.current_tetromino, None)
+        obs = self._get_observation()
+
+        return obs
         
     def apply_action(self, action: Actions) -> bool:
         """Apply an action. Returns whether the action could be applied or not."""
@@ -281,6 +292,9 @@ class PygameTetris(Env):
                 if cell:
                     self.grid[new_tetromino.y + y][new_tetromino.x + x] = 1
 
+
+
+    # Reward stuff
     def calculate_reward(self, lines_cleared, height_placed):
         reward = 0
         reward += lines_cleared ** 2 * 50
@@ -295,15 +309,15 @@ class PygameTetris(Env):
         '''
         return reward
 
-    def clear_lines(self, grid):
-        full_rows = [i for i, row in enumerate(grid) if all(row)]
+    def clear_lines(self):
+        full_rows = [i for i, row in enumerate(self.grid) if all(row)]
         for i in full_rows:
-            del grid[i]
-            grid.insert(0, [0 for _ in range(self.COLUMNS)])
+            del self.grid[i]
+            self.grid.insert(0, [0 for _ in range(self.COLUMNS)])
         return len(full_rows)
 
-    def check_game_over(self, grid, tetromino):
-        return tetromino.collision(grid, offset=(0, 0))
+    def check_game_over(self, grid, tetromino: Tetromino):
+        return tetromino.is_colliding(grid, offset=(0, 0))
 
 
     def calculate_bumpiness(self, grid) -> int:
@@ -323,7 +337,7 @@ class PygameTetris(Env):
 
     def count_holes(self) -> int:
         """Returns the amount of holes."""
-        holes_table = [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
+        holes_table = self.generate_grid()
         hole_count = 0
         for row in range(self.ROWS):
             # block_found = False
@@ -359,7 +373,18 @@ class PygameTetris(Env):
     def count_clearable_lines(grid):
         return sum(1 for row in grid if all(row))
     
-    def reset_screen(self):
+
+    # Rendering
+    def _get_observation(self):
+        if self.discrete_obs:
+            grid_flattened = np.array(self.grid).flatten()
+            tetromino_flattened = shape_to_numpy(self.next_tetromino).flatten()
+            obs = np.hstack((grid_flattened, tetromino_flattened))
+        else:
+            obs = pygame.surfarray.array3d(self.screen)
+        return obs
+    
+    def _reset_screen(self):
         self.screen.fill(BLACK)
 
         # Draw gray grid lines
@@ -369,6 +394,7 @@ class PygameTetris(Env):
             pygame.draw.line(self.screen, GRAY, (0, y * self.GRID_SIZE), (self.SCREEN_WIDTH - self.PREVIEW_WIDTH, y * self.GRID_SIZE))
 
     def render_screen(self):
+        self._reset_screen()
         # self.current_tetromino.draw(self.screen)
         for y in range(self.ROWS):
             for x in range(self.COLUMNS):
@@ -378,6 +404,9 @@ class PygameTetris(Env):
                                                  y * self.GRID_SIZE, 
                                                  self.GRID_SIZE, self.GRID_SIZE))
         self.draw_next_tetromino(self.next_tetromino.shape, self.COLUMNS + 1, 2, self.screen, GREEN)
+
+        if self.render_screen:
+            pygame.display.flip()
 
     def draw_next_tetromino(self, shape, x, y, screen, color):
         for row_idx, row in enumerate(shape):
@@ -394,6 +423,11 @@ class PygameTetris(Env):
                         )
                     )
 
+
+    # Helper
+    def generate_grid(self):
+        return [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
+    
     def _init_rewards(self):
         self.action_penalty = 3e-4
         self.step_reward = 1e-3
