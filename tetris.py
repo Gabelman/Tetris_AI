@@ -113,7 +113,6 @@ class Actions(Enum):
     RotateClock = 3
     RotateCClock = 4
 
-
 # def get_action():
 #     # random.seed()
 #     grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
@@ -175,9 +174,10 @@ class Actions(Enum):
 #                 running = False
 
 class PygameTetris(Env):
-    def __init__(self, seed):
+    def __init__(self, seed, discrete_obs=True, render=False):
         self._init_rewards()
         self.random_seed = seed #TODO   
+        self.discrete_obs = discrete_obs
         # Screen dimensions with extra width for the preview
         self.SCALE=1
         self.PREVIEW_WIDTH = 25 * self.SCALE
@@ -233,15 +233,14 @@ class PygameTetris(Env):
 
         self.render_screen()
         obs = pygame.surfarray.array3d(self.screen)
+        if self.discrete_obs:
+            obs = self.grid
+        return obs, reward, terminated
+
+    def reset(self):
+        self.grid = [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
+
         
-
-        # pygame.display.flip()
-        # clock.tick(10)  # Slower speed to observe AI's moves
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
     def apply_action(self, action: Actions) -> bool:
         """Apply an action. Returns whether the action could be applied or not."""
         if action == Actions.MoveLeft:  # Move left
@@ -332,24 +331,7 @@ class PygameTetris(Env):
                     holes_table[row][col] += 1
                     if col + 1 >= self.COLUMNS or self.grid[row][col + 1]:
                         hole_count += holes_table[row][col]
-                    # elif :
-                    #     hole_count += holes_table[row][col]
                     
-
-
-
-                # if left_open and holes_table[col]:
-                    
-                # up_open = row < 0 # open over the screen
-                # if not up_open:
-                #     up_open = holes_table[col][row - 1] > 0 or self.grid[col][row - 1]
-                
-                # if self.grid[row][col]:
-                #     block_found = True
-                # elif block_found:
-                #     if (row + 1 < len(self.grid) and self.grid[row + 1][col]) and (row - 1 > 0 and self.grid[row - 1][col]):
-                #         # The check here (row + 1 < len()) is evaluated first, such that no wrong indexing takes place.
-                #         holes += 1
         return hole_count
 
     def calculate_height(self):

@@ -7,6 +7,8 @@ import numpy as np
 from collections import deque
 import pickle
 
+from tetris import PygameTetris, Actions
+
 # Initialize Pygame
 pygame.init()
 
@@ -246,20 +248,6 @@ class DQNAgent:
         except FileNotFoundError:
             print("No existing memory file found.")
 
-# def calculate_reward(grid, lines_cleared, height_placed):
-#     reward = 0
-#     reward += lines_cleared ** 2 * 50
-#     reward += (ROWS - height_placed) / 10
-#     reward -= count_holes(grid) * 2
-#     reward -= calculate_bumpiness(grid) * 0.5
-#     reward -= calculate_height(grid) * 0.2
-#     '''# Penalty for height differences
-#     for i in range(COLUMNS - 1):
-#         height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
-#         reward -= height_diff * 0.1
-#     '''
-#     return reward
-
 def train_ai(continue_training=False):
     agent = DQNAgent()
     
@@ -335,7 +323,8 @@ def train_ai(continue_training=False):
     agent.save_memory()
 
 def play_ai():
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    game = PygameTetris(0)
+    # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
 
     ai_model = TetrisAI()
@@ -344,9 +333,9 @@ def play_ai():
     agent = DQNAgent()
     agent.model = ai_model
 
-    grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
-    current_tetromino = Tetromino(random.choice(SHAPES))
-    next_tetromino = Tetromino(random.choice(SHAPES))
+    # grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
+    # current_tetromino = Tetromino(random.choice(SHAPES))
+    # next_tetromino = Tetromino(random.choice(SHAPES))
     running = True
 
     while running:
