@@ -11,12 +11,13 @@ import pickle
 pygame.init()
 
 # Screen dimensions with extra width for the preview
-PREVIEW_WIDTH = 150
-SCREEN_WIDTH = 300 + PREVIEW_WIDTH
-SCREEN_HEIGHT = 600
+SCALE=5
+PREVIEW_WIDTH = 25 * SCALE
+SCREEN_WIDTH = 50 * SCALE + PREVIEW_WIDTH
+SCREEN_HEIGHT = 100 * SCALE
 COLUMNS = 10
 ROWS = 20
-GRID_SIZE = 30
+GRID_SIZE = 5 * SCALE
 
 # Colors
 BLACK = (0, 0, 0)
@@ -245,19 +246,19 @@ class DQNAgent:
         except FileNotFoundError:
             print("No existing memory file found.")
 
-def calculate_reward(grid, lines_cleared, height_placed):
-    reward = 0
-    reward += lines_cleared ** 2 * 50
-    reward += (ROWS - height_placed) / 10
-    reward -= count_holes(grid) * 2
-    reward -= calculate_bumpiness(grid) * 0.5
-    reward -= calculate_height(grid) * 0.2
-    '''# Penalty for height differences
-    for i in range(COLUMNS - 1):
-        height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
-        reward -= height_diff * 0.1
-    '''
-    return reward
+# def calculate_reward(grid, lines_cleared, height_placed):
+#     reward = 0
+#     reward += lines_cleared ** 2 * 50
+#     reward += (ROWS - height_placed) / 10
+#     reward -= count_holes(grid) * 2
+#     reward -= calculate_bumpiness(grid) * 0.5
+#     reward -= calculate_height(grid) * 0.2
+#     '''# Penalty for height differences
+#     for i in range(COLUMNS - 1):
+#         height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
+#         reward -= height_diff * 0.1
+#     '''
+#     return reward
 
 def train_ai(continue_training=False):
     agent = DQNAgent()
