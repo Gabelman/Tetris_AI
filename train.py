@@ -323,10 +323,12 @@ def train_ai(continue_training=False):
     agent.save_memory()
 
 def play_ai(human_player=True):
-    game = PygameTetris(0, render=True)
+    game = PygameTetris(0, render=True, scale=6)
+    FPS = 5
     # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
 
+    obs = game.reset()
     if not human_player:
 
         ai_model = TetrisAI()
@@ -339,75 +341,54 @@ def play_ai(human_player=True):
     # current_tetromino = Tetromino(random.choice(SHAPES))
     # next_tetromino = Tetromino(random.choice(SHAPES))
     running = True
+    clock.tick(FPS)
 
     while running:
-        # screen.fill(BLACK)
+        action = Actions.NoAction
+        if human_player:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    running = False
+                    break
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_LEFT:
+                        action = Actions.MoveLeft
+                    elif event.key == pygame.K_RIGHT:
+                        action = Actions.MoveRight
+                    elif event.key == pygame.K_e:
+                        action = Actions.RotateClock
+                    elif event.key == pygame.K_q:
+                        action = Actions.RotateCClock
+        else:
+            # state = agent.get_state(grid, current_tetromino)
+            # action = agent.act(state)
+            pass
 
-        # Draw gray grid lines
-        # for x in range(COLUMNS + 1):
-        #     pygame.draw.line(screen, GRAY, (x * GRID_SIZE, 0), (x * GRID_SIZE, SCREEN_HEIGHT))
-        # for y in range(ROWS + 1):
-        #     pygame.draw.line(screen, GRAY, (0, y * GRID_SIZE), (SCREEN_WIDTH - PREVIEW_WIDTH, y * GRID_SIZE))
-        
-        state = agent.get_state(grid, current_tetromino)
-        action = agent.act(state)
+        obs, reward, terminated = game.step(action)
 
-        if action == 0:  # Move left
-            current_tetromino.x -= 1
-            if current_tetromino.collision(grid):
-                current_tetromino.x += 1
-        elif action == 1:  # Move right
-            current_tetromino.x += 1
-            if current_tetromino.collision(grid):
-                current_tetromino.x -= 1
-        elif action == 2:  # Rotate
-            current_tetromino.rotate(grid)
+        clock.tick(FPS)  # Slower speed to observe AI's moves
 
-        current_tetromino.y += 1
-        if current_tetromino.collision(grid):
-            current_tetromino.y -= 1
-            current_tetromino.lock(grid)
-            lines_cleared = clear_lines(grid)
-            
-            current_tetromino = next_tetromino
-            next_tetromino = Tetromino(random.choice(SHAPES))
-
-            if check_game_over(grid, current_tetromino):
-                print("Game Over!")
-                running = False
-
-        current_tetromino.draw(screen)
-        for y in range(ROWS):
-            for x in range(COLUMNS):
-                if grid[y][x]:
-                    pygame.draw.rect(screen, BLUE, 
-                                     pygame.Rect(x * GRID_SIZE, 
-                                                 y * GRID_SIZE, 
-                                                 GRID_SIZE, GRID_SIZE))
-        draw_tetromino(next_tetromino.shape, COLUMNS + 1, 2, screen, GREEN)
-
-        pygame.display.flip()
-        clock.tick(10)  # Slower speed to observe AI's moves
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+        # for event in pygame.event.get():
+        #     if event.type == pygame.QUIT:
+        #         running = False
 
     pygame.quit()
 
 if __name__ == "__main__":
-    try:
-        choice = input("Enter 'train' to train the AI or 'play' to watch the AI play: ")
-        if choice.lower() == 'train':
-            train_ai(continue_training=True)
-        elif choice.lower() == 'play':
-            play_ai()
-        else:
-            print("Invalid choice. Please enter 'train' or 'play'.")
-    except EOFError:
-        print("No input received. Defaulting to training mode.")
-        train_ai(continue_training=True)
-    except KeyboardInterrupt:
-        print("\nProgram interrupted by user. Exiting.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    play_ai()
+    # try:
+    #     choice = input("Enter 'train' to train the AI or 'play' to watch the AI play: ")
+    #     if choice.lower() == 'train':
+    #         train_ai(continue_training=True)
+    #     elif choice.lower() == 'play':
+    #         play_ai()
+    #     else:
+    #         print("Invalid choice. Please enter 'train' or 'play'.")
+    # except EOFError:
+    #     print("No input received. Defaulting to training mode.")
+    #     train_ai(continue_training=True)
+    # except KeyboardInterrupt:
+    #     print("\nProgram interrupted by user. Exiting.")
+    # except Exception as e:
+    #     print(f"An unexpected error occurred: {e}")

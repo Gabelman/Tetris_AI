@@ -6,7 +6,12 @@ import copy
 
 from environment import Env
 
-
+class Actions(Enum):
+    NoAction = 0
+    MoveLeft = 1
+    MoveRight = 2
+    RotateClock = 3
+    RotateCClock = 4
 
 # Colors
 BLACK = (0, 0, 0)
@@ -43,13 +48,13 @@ class Tetromino:
         self.y = 0
         self.rotation_state = 0
 
-    def rotate(self, grid, clockwise=True):
+    def rotate(self, clockwise=True):
         if len(self.shape) == 2 and len(self.shape[0]) == 2:  # O piece doesn't rotate
             return
 
-        original_x = self.x
-        original_y = self.y
-        original_shape = self.shape
+        # original_x = self.x
+        # original_y = self.y
+        # original_shape = self.shape
 
         # Perform rotation
         if clockwise:
@@ -60,13 +65,13 @@ class Tetromino:
         
         # Check if rotation is possible
         self.shape = rotated
-        if self.collision(grid):
-            # If collision occurs, revert the rotation
-            self.shape = original_shape
-            self.x = original_x
-            self.y = original_y
-        else:
-            self.rotation_state = (self.rotation_state + 1) % 4
+        # if self.collision(grid):
+        #     # If collision occurs, revert the rotation
+        #     self.shape = original_shape
+        #     self.x = original_x
+        #     self.y = original_y
+        # else:
+        self.rotation_state = (self.rotation_state + 1) % 4
 
     def is_colliding(self, grid, offset=(0, 0)):
         off_y, off_x = offset
@@ -90,98 +95,19 @@ class Tetromino:
     #                                              (self.y + y) * grid_size, 
     #                                              grid_size, grid_size))
 
-
     def move_down(self):
         self.y += 1
 
 
-# class Grid():
-#     def __init__(self, rows, cols):
-#         # self.rows = rows
-#         # self.cols = cols
-#         self.grid = np.zeros((cols, rows))
 
-#     @property
-#     def num_rows(self):
-#         return self.grid.shape[1]
-#     @property
-#     def num_cols(self):
-#         return self.grid.shape[0]
-#     def get_val_at_pos()
-class Actions(Enum):
-    NoAction = 0
-    MoveLeft = 1
-    MoveRight = 2
-    RotateClock = 3
-    RotateCClock = 4
-
-# def get_action():
-#     # random.seed()
-#     grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
-#     current_tetromino = Tetromino(random.choice(SHAPES))
-#     next_tetromino = Tetromino(random.choice(SHAPES))
-#     running = True
-
-#     while running:
-#         screen.fill(BLACK)
-
-#         # Draw gray grid lines
-#         for x in range(COLUMNS + 1):
-#             pygame.draw.line(screen, GRAY, (x * GRID_SIZE, 0), (x * GRID_SIZE, SCREEN_HEIGHT))
-#         for y in range(ROWS + 1):
-#             pygame.draw.line(screen, GRAY, (0, y * GRID_SIZE), (SCREEN_WIDTH - PREVIEW_WIDTH, y * GRID_SIZE))
-        
-#         state = agent.get_state(grid, current_tetromino)
-#         action = agent.act(state)
-
-#         if action == 0:  # Move left
-#             current_tetromino.x -= 1
-#             if current_tetromino.collision(grid):
-#                 current_tetromino.x += 1
-#         elif action == 1:  # Move right
-#             current_tetromino.x += 1
-#             if current_tetromino.collision(grid):
-#                 current_tetromino.x -= 1
-#         elif action == 2:  # Rotate
-#             current_tetromino.rotate(grid)
-
-#         current_tetromino.y += 1
-#         if current_tetromino.collision(grid):
-#             current_tetromino.y -= 1
-#             current_tetromino.lock(grid)
-#             lines_cleared = clear_lines(grid)
-            
-#             current_tetromino = next_tetromino
-#             next_tetromino = Tetromino(random.choice(SHAPES))
-
-#             if check_game_over(grid, current_tetromino):
-#                 print("Game Over!")
-#                 running = False
-
-#         current_tetromino.draw(screen)
-#         for y in range(ROWS):
-#             for x in range(COLUMNS):
-#                 if grid[y][x]:
-#                     pygame.draw.rect(screen, BLUE, 
-#                                      pygame.Rect(x * GRID_SIZE, 
-#                                                  y * GRID_SIZE, 
-#                                                  GRID_SIZE, GRID_SIZE))
-#         draw_tetromino(next_tetromino.shape, COLUMNS + 1, 2, screen, GREEN)
-
-#         pygame.display.flip()
-#         clock.tick(10)  # Slower speed to observe AI's moves
-
-#         for event in pygame.event.get():
-#             if event.type == pygame.QUIT:
-#                 running = False
 
 class PygameTetris(Env):
-    def __init__(self, seed, discrete_obs=True, render=False):
+    def __init__(self, seed, discrete_obs=True, render=False, scale=1):
         self._init_rewards()
         self.random_seed = seed #TODO   
         self.discrete_obs = discrete_obs
         # Screen dimensions with extra width for the preview
-        self.SCALE=1
+        self.SCALE=scale
         self.PREVIEW_WIDTH = 25 * self.SCALE
         self.SCREEN_WIDTH = 50 * self.SCALE + self.PREVIEW_WIDTH
         self.SCREEN_HEIGHT = 100 * self.SCALE
@@ -190,10 +116,12 @@ class PygameTetris(Env):
         self.GRID_SIZE = 5 * self.SCALE
 
         self.grid = self.generate_grid()
+        self.static_grid = self.generate_grid()
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
         self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        self.render = render
 
     
     def step(self, action: Actions):
@@ -205,6 +133,10 @@ class PygameTetris(Env):
         terminated = False
         # truncated = False
 
+        # Reward values
+        lines_cleared = 0
+        height_placed = 0
+
         #TODO: Action penalty?
         # reward -= self.action_penalty
         # elif action == Actions.NoAction:
@@ -213,17 +145,17 @@ class PygameTetris(Env):
         if not self.apply_action(action):
             reward -= 100
 
-        if self.current_tetromino.is_colliding(self.grid, (1, 0)):
-            # self.current_tetromino.lock_on_grid(self.grid)
-            lines_cleared = self.clear_lines(self.grid)
+        if self.current_tetromino.is_colliding(self.static_grid, (1, 0)):
+            self.update_grid(self.static_grid, self.current_tetromino, None)
+            lines_cleared = self.clear_lines()
             height_placed = self.current_tetromino.y
             
-            current_tetromino = next_tetromino
-            next_tetromino = Tetromino(random.choice(SHAPES))
+            self.current_tetromino = self.next_tetromino
+            self.next_tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
-            self.update_grid(current_tetromino, None)
+            self.update_grid(self.grid, self.current_tetromino, None)
 
-            if self.check_game_over(self.grid, current_tetromino):
+            if self.check_game_over(self.grid, self.current_tetromino):
                 print("Game Over!")
                 terminated = True
                 reward -= 500
@@ -231,7 +163,7 @@ class PygameTetris(Env):
         else:
             tetromino_to_remove = copy.deepcopy(self.current_tetromino)
             self.current_tetromino.move_down()
-            self.update_grid(self.current_tetromino, tetromino_to_remove)
+            self.update_grid(self.grid, self.current_tetromino, tetromino_to_remove)
 
 
         
@@ -249,7 +181,8 @@ class PygameTetris(Env):
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
-        self.update_grid(self.current_tetromino, None)
+        self.update_grid(self.grid, self.current_tetromino, None)
+        self.render_screen()
         obs = self._get_observation()
 
         return obs
@@ -259,38 +192,38 @@ class PygameTetris(Env):
         backup_tetromino = copy.deepcopy(self.current_tetromino)
         if action == Actions.MoveLeft:  # Move left
             self.current_tetromino.x -= 1
-            if self.current_tetromino.is_colliding(self.grid):
+            if self.current_tetromino.is_colliding(self.static_grid):
                 self.current_tetromino.x += 1
                 return False
         elif action == Actions.MoveRight:  # Move right
             self.current_tetromino.x += 1
-            if self.current_tetromino.is_colliding(self.grid):
+            if self.current_tetromino.is_colliding(self.static_grid):
                 self.current_tetromino.x -= 1
                 return False
         elif action == Actions.RotateClock:  # Rotate clockwise
-            self.current_tetromino.rotate(self.grid)
-            if self.current_tetromino.is_colliding(self.grid):
-                self.current_tetromino.rotate(self.grid, clockwise=False)
+            self.current_tetromino.rotate()
+            if self.current_tetromino.is_colliding(self.static_grid):
+                self.current_tetromino.rotate(clockwise=False)
                 return False
         elif action == Actions.RotateCClock: # counterclockwise
-            self.current_tetromino.rotate(self.grid, clockwise=False)
-            if self.current_tetromino.is_colliding(self.grid):
-                self.current_tetromino.rotate(self.grid)
+            self.current_tetromino.rotate(clockwise=False)
+            if self.current_tetromino.is_colliding(self.static_grid):
+                self.current_tetromino.rotate()
                 return False
             
-        self.update_grid(self.current_tetromino, backup_tetromino)
+        self.update_grid(self.grid, self.current_tetromino, backup_tetromino)
         return True
     
-    def update_grid(self, new_tetromino: Tetromino, remove_tetromino: Tetromino):
+    def update_grid(self, grid, new_tetromino: Tetromino, remove_tetromino: Tetromino):
         if remove_tetromino:
             for y, row in enumerate(remove_tetromino.shape):
                 for x, cell in enumerate(row):
                     if cell:
-                        self.grid[remove_tetromino.y + y][remove_tetromino.x + x] = 0
+                        grid[remove_tetromino.y + y][remove_tetromino.x + x] = 0
         for y, row in enumerate(new_tetromino.shape):
             for x, cell in enumerate(row):
                 if cell:
-                    self.grid[new_tetromino.y + y][new_tetromino.x + x] = 1
+                    grid[new_tetromino.y + y][new_tetromino.x + x] = 1
 
 
 
@@ -299,8 +232,9 @@ class PygameTetris(Env):
         reward = 0
         reward += lines_cleared ** 2 * 50
         reward += (self.ROWS - height_placed) / 10
-        reward -= self.count_holes() * 2
-        reward -= self.calculate_bumpiness() * 0.5
+        reward -= self.count_holes(self.static_grid) * 2
+        # TODO: the issue here is that landing a tile incidentally gives negative reward. Maybe bumpiness and height need to be adjusted with a certain "gold standard".
+        reward -= self.calculate_bumpiness(self.static_grid) * 0.5
         reward -= self.calculate_height() * 0.2
         '''# Penalty for height differences
         for i in range(COLUMNS - 1):
@@ -313,7 +247,9 @@ class PygameTetris(Env):
         full_rows = [i for i, row in enumerate(self.grid) if all(row)]
         for i in full_rows:
             del self.grid[i]
+            del self.static_grid[i]
             self.grid.insert(0, [0 for _ in range(self.COLUMNS)])
+            self.static_grid.insert(0, [0 for _ in range(self.COLUMNS)])
         return len(full_rows)
 
     def check_game_over(self, grid, tetromino: Tetromino):
@@ -335,38 +271,38 @@ class PygameTetris(Env):
         
         return bumpiness
 
-    def count_holes(self) -> int:
+    def count_holes(self, grid) -> int:
         """Returns the amount of holes."""
         holes_table = self.generate_grid()
         hole_count = 0
         for row in range(self.ROWS):
             # block_found = False
             for col in range(self.COLUMNS):
-                if self.grid[row][col]:
+                if grid[row][col]:
                     continue
                 left_open = True
                 up_open = True
                 if col > 0:
-                    if self.grid[row][col - 1]:
+                    if grid[row][col - 1]:
                         left_open = False
                     elif holes_table[row][col - 1] > 0:
                         left_open = False
                         holes_table[row][col] = holes_table[row][col - 1]
                 if row > 0:
-                    if self.grid[row - 1][col] or holes_table[row - 1][col] > 0:
+                    if grid[row - 1][col] or holes_table[row - 1][col] > 0:
                         up_open = False
                 if up_open: #opening on top found
                     holes_table[row][col] = 0
                 if not up_open and not left_open:
                     holes_table[row][col] += 1
-                    if col + 1 >= self.COLUMNS or self.grid[row][col + 1]:
+                    if col + 1 >= self.COLUMNS or grid[row][col + 1]:
                         hole_count += holes_table[row][col]
                     
         return hole_count
 
     def calculate_height(self):
         for row in range(self.ROWS):
-            if any(self.grid[row]):
+            if any(self.static_grid[row]):
                 return self.ROWS - row
         return 0
 
@@ -378,7 +314,7 @@ class PygameTetris(Env):
     def _get_observation(self):
         if self.discrete_obs:
             grid_flattened = np.array(self.grid).flatten()
-            tetromino_flattened = shape_to_numpy(self.next_tetromino).flatten()
+            tetromino_flattened = shape_to_numpy(self.next_tetromino.shape).flatten()
             obs = np.hstack((grid_flattened, tetromino_flattened))
         else:
             obs = pygame.surfarray.array3d(self.screen)
@@ -405,7 +341,7 @@ class PygameTetris(Env):
                                                  self.GRID_SIZE, self.GRID_SIZE))
         self.draw_next_tetromino(self.next_tetromino.shape, self.COLUMNS + 1, 2, self.screen, GREEN)
 
-        if self.render_screen:
+        if self.render:
             pygame.display.flip()
 
     def draw_next_tetromino(self, shape, x, y, screen, color):
