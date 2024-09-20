@@ -2,6 +2,7 @@ import pygame
 import random
 import numpy as np
 from enum import Enum
+import copy
 
 from environment import Env
 
@@ -74,20 +75,15 @@ class Tetromino:
                         return True
         return False
 
-    def draw(self, screen, grid_size):
-        for y, row in enumerate(self.shape):
-            for x, cell in enumerate(row):
-                if cell:
-                    pygame.draw.rect(screen, RED, 
-                                     pygame.Rect((self.x + x) * grid_size, 
-                                                 (self.y + y) * grid_size, 
-                                                 grid_size, grid_size))
+    # def draw(self, screen, grid_size):
+    #     for y, row in enumerate(self.shape):
+    #         for x, cell in enumerate(row):
+    #             if cell:
+    #                 pygame.draw.rect(screen, RED, 
+    #                                  pygame.Rect((self.x + x) * grid_size, 
+    #                                              (self.y + y) * grid_size, 
+    #                                              grid_size, grid_size))
 
-    def lock_on_grid(self, grid):
-        for y, row in enumerate(self.shape):
-            for x, cell in enumerate(row):
-                if cell:
-                    grid[self.y + y][self.x + x] = 1
 
     def move_down(self):
         self.y += 1
@@ -196,7 +192,7 @@ class PygameTetris(Env):
     
     def step(self, action: Actions):
         self.reset_screen()
-
+        
         # Return values
         obs = pygame.surfarray.array3d(self.screen)
         reward = 0
@@ -207,17 +203,19 @@ class PygameTetris(Env):
         # reward -= self.action_penalty
         # elif action == Actions.NoAction:
         #     reward += self.action_penalty
-
+        
         if not self.apply_action(action):
             reward -= 100
 
         if self.current_tetromino.is_colliding(self.grid, (1, 0)):
-            self.current_tetromino.lock_on_grid(self.grid)
+            # self.current_tetromino.lock_on_grid(self.grid)
             lines_cleared = self.clear_lines(self.grid)
             height_placed = self.current_tetromino.y
             
             current_tetromino = next_tetromino
             next_tetromino = Tetromino(random.choice(SHAPES))
+
+            self.update_grid(current_tetromino, None)
 
             if self.check_game_over(self.grid, current_tetromino):
                 print("Game Over!")
@@ -225,8 +223,12 @@ class PygameTetris(Env):
                 reward -= 500
                 return obs, reward, terminated
         else:
+            tetronimo_to_remove = copy.deepcopy(self.current_tetromino)
             self.current_tetromino.move_down()
+            self.update_grid(self.current_tetromino, tetronimo_to_remove)
 
+
+        
         reward += self.step_reward
         reward += self.calculate_reward(lines_cleared, height_placed)
 
@@ -243,6 +245,7 @@ class PygameTetris(Env):
         
     def apply_action(self, action: Actions) -> bool:
         """Apply an action. Returns whether the action could be applied or not."""
+        backup_tetromino = copy.deepcopy(self.current_tetromino)
         if action == Actions.MoveLeft:  # Move left
             self.current_tetromino.x -= 1
             if self.current_tetromino.is_colliding(self.grid):
@@ -263,8 +266,21 @@ class PygameTetris(Env):
             if self.current_tetromino.is_colliding(self.grid):
                 self.current_tetromino.rotate(self.grid)
                 return False
+            
+        self.update_grid(self.current_tetromino, backup_tetromino)
         return True
     
+    def update_grid(self, new_tetromino: Tetromino, remove_tetromino: Tetromino):
+        if remove_tetromino:
+            for y, row in enumerate(remove_tetromino.shape):
+                for x, cell in enumerate(row):
+                    if cell:
+                        self.grid[remove_tetromino.y + y][remove_tetromino.x + x] = 0
+        for y, row in enumerate(new_tetromino.shape):
+            for x, cell in enumerate(row):
+                if cell:
+                    self.grid[new_tetromino.y + y][new_tetromino.x + x] = 1
+
     def calculate_reward(self, lines_cleared, height_placed):
         reward = 0
         reward += lines_cleared ** 2 * 50
@@ -353,7 +369,7 @@ class PygameTetris(Env):
             pygame.draw.line(self.screen, GRAY, (0, y * self.GRID_SIZE), (self.SCREEN_WIDTH - self.PREVIEW_WIDTH, y * self.GRID_SIZE))
 
     def render_screen(self):
-        self.current_tetromino.draw(self.screen)
+        # self.current_tetromino.draw(self.screen)
         for y in range(self.ROWS):
             for x in range(self.COLUMNS):
                 if self.grid[y][x]:
@@ -361,9 +377,9 @@ class PygameTetris(Env):
                                      pygame.Rect(x * self.GRID_SIZE, 
                                                  y * self.GRID_SIZE, 
                                                  self.GRID_SIZE, self.GRID_SIZE))
-        self.draw_tetromino(self.next_tetromino.shape, self.COLUMNS + 1, 2, self.screen, GREEN)
+        self.draw_next_tetromino(self.next_tetromino.shape, self.COLUMNS + 1, 2, self.screen, GREEN)
 
-    def draw_tetromino(self, shape, x, y, screen, color):
+    def draw_next_tetromino(self, shape, x, y, screen, color):
         for row_idx, row in enumerate(shape):
             for col_idx, cell in enumerate(row):
                 if cell:
