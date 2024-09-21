@@ -418,21 +418,22 @@ class PygameTetris(Env):
 # No illegal move for rotation
 # No penalty for illegal moves
 
-def play_pygame(model_path, speed=1): # currently only works for conv2d model
-    game = PygameTetris(0, discrete_obs=False, render=True, scale=6)
+def play_pygame(model_file, device, speed=1, scale=1): # currently only works for conv2d model
+    game = PygameTetris(0, discrete_obs=False, render=True, scale=scale)
     FPS = 64
 
     observation_space = game.observation_space
     action_space = game.action_space
 
     human_player = False
-    if model_path:
-        model = TetrisAgent(*observation_space, action_space)
+    if model_file:
+        model = TetrisAgent(*observation_space, action_space, device)
+        model.to(device)
         try:
-            model.load_state_dict(torch.load(model_path))
+            model.load_state_dict(torch.load("exports/" + model_file, map_location=device))
             print("Loaded existing model to play.")
         except FileNotFoundError:
-            print(f"Invalid path to model file: {model_path}.")
+            print(f"Invalid path to model file: {model_file}.")
             return
     else:
         human_player = True

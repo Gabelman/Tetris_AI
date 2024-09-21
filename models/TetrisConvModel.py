@@ -2,9 +2,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
-# import numpy as np
-import gymnasium as gym
-from torch import Tensor
+import numpy as np
+
 
 # env = gym.make("ALE/Tetris-v5")
 # observation, _ = env.reset()
@@ -34,7 +33,7 @@ class InitialImageEmbed(nn.Module):
         return x
 
 class TetrisAgent(nn.Module):
-    def __init__(self, C, H, W, output_dim):
+    def __init__(self, C, H, W, output_dim, device):
         super().__init__()
         kernel_depth = 8  # 8 chosen arbitratily at this point
         kernel_depth2 = 4
@@ -54,22 +53,25 @@ class TetrisAgent(nn.Module):
             nn.ReLU(),
             nn.Linear(kernel_depth2 * H * W, 1)
         )
+        self.device = device
 
     def forward(self, obs):
-        obs = self.add_batch_dimension(obs)
+        obs = self.preprocess_obs(obs)
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
         v = self.value_head(initial_embed)
         return pi, v
     
     def get_pis(self, obs):
-        obs = self.add_batch_dimension(obs)
+        obs = self.preprocess_obs(obs)
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
         return pi
     
-    @staticmethod
-    def add_batch_dimension(obs: Tensor):
+    
+    def preprocess_obs(self, obs):
+        if isinstance(obs, np.ndarray):
+            obs = torch.tensor(obs).to(self.device, dtype=torch.float)
         if len(obs.shape) == 3:
             return obs.unsqueeze(0)
         return obs

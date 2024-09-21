@@ -27,7 +27,8 @@ class PPO():
         self.generator = Generator(num_environments=self.episodes_per_batch, max_timesteps_per_episode=self.max_timesteps_per_episode, environment_factory=environment_factory, gamma=self.gamma, device=device)
         channels, height, width = self.generator.get_observation_space()
 
-        self.tetris_model = TetrisAgent(channels, height, width, self.generator.get_action_space()).to(device)
+        self.tetris_model = TetrisAgent(channels, height, width, self.generator.get_action_space(), device)
+        self.tetris_model.to(device)
         self.experiment = experiment
         if load_model_from_experiment >= 0:
             self.load_model(load_model_from_experiment)
@@ -196,7 +197,7 @@ class PPO():
         self.generator.close()
     
     def load_model(self, experiment:int):
-        self.tetris_model.load_state_dict(torch.load(export_path + str(experiment) + ".pth"))
+        self.tetris_model.load_state_dict(torch.load(export_path + str(experiment) + ".pth", map_location=self.device))
 
     def save_model(self):
         torch.save(self.tetris_model.state_dict(), export_path + str(self.experiment) + ".pth")

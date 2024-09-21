@@ -67,7 +67,7 @@ class Generator():
                 with torch.no_grad():
                     batch_done_mask[idx] = True
 
-                    obs = self.obs_to_tensor(obs)
+                    # obs = self.obs_to_tensor(obs)
                     
                     pi = model.get_pis(obs)
                     action, log_prob = self.sample_action(pi)
@@ -110,8 +110,8 @@ class Generator():
     def get_observation_space(self):
         return self.observation_space
 
-    def obs_to_tensor(self, obs):
-        return torch.tensor(obs).to(self.device, dtype=torch.float)
+    # def obs_to_tensor(self, obs):
+    #     return torch.tensor(obs).to(self.device, dtype=torch.float)
 
     @staticmethod
     def sample_action(logits):
