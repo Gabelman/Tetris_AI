@@ -5,7 +5,7 @@ from torch.amp import GradScaler, autocast
 import numpy as np
 
 from tqdm import tqdm
-# import wandb
+import wandb
 
 from generator import Generator
 from models.TetrisConvModel import TetrisAgent
@@ -34,6 +34,7 @@ class PPO():
         self.update_size = self.batch_size // self.num_mini_batch_updates
         self.mini_batch_size = self.update_size // self.num_sub_mini_batches
         self.device = device
+        wandb.init(project="TetrisRenforcementLearning", name="pygame and ppo", config=config.to_dict())
         
     def train(self, total_timesteps):
         current_timesteps = 0
@@ -60,7 +61,11 @@ class PPO():
             batch_idcs = np.arange(self.batch_size)
 
             print(f"=============\Iteration: {self.iteration}\ncurrent time steps: {current_timesteps}\n=============\n")
-            print(f"episodic return: {torch.sum(batch_rews[batch_done_mask])}")
+            episodic_return = torch.sum(batch_rews[batch_done_mask])
+            average_lengths = np.mean(batch_lengths)
+            std_lengths = np.std(batch_lengths)
+            print(f"episodic return: {episodic_return}")
+            wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
             for _ in tqdm(range(self.updates_per_iteration)):
                 update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size))
                 for update_idcs in update_batch_idcs:

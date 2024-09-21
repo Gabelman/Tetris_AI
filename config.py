@@ -14,8 +14,10 @@ class Config():
         self.lam = lam
         self.lr = lr
 
+        self.current_commit = "a57665626ba57f127bee842e3221b549cb823f82"
 
-    def as_dict(self):
+
+    def to_dict(self):
         dictionary = {
             "episodes_per_batch": self.episodes_per_batch,
             "max_timesteps_per_episode": self.max_timesteps_per_episode,
@@ -27,5 +29,6 @@ class Config():
             "epsilon": self.epsilon,
             "lam": self.lam,
             "lr": self.lr,
+            "current_commit": self.current_commit,
         }
         return dictionary
