@@ -121,14 +121,12 @@ class PygameTetris(Env):
 
     
     def step(self, action: Actions):
-        # self.reset_screen()
-        
+
         # Return values
         obs = np.zeros(self.observation_space)
         reward = 0
         terminated = False
         # truncated = False
-
 
         #TODO: Action penalty?
         # reward -= self.action_penalty
@@ -474,9 +472,5 @@ def play_pygame(model):
 
 
         clock.tick(FPS)  # Slower speed to observe AI's moves
-
-        # for event in pygame.event.get():
-        #     if event.type == pygame.QUIT:
-        #         running = False
 
     pygame.quit()

@@ -1,12 +1,4 @@
 from abc import ABC, abstractmethod
-# import numpy as np
-
-# from enum import Enum
-
-
-# class EnvironmentType(Enum):
-#     Pygame: 0
-#     Gymnasium: 1
 
 class Env(ABC):
     def __init__(self):
