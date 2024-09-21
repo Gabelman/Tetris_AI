@@ -15,15 +15,22 @@ from config import Config
 
 from functools import partial
 
+
+export_path = "exports/ppo_conv_model_exp_"
+
 class PPO():
-    def __init__(self, device, config: Config) -> None:
+    def __init__(self, device, config: Config, experiment:int, load_model_from_experiment=-1) -> None:
         self.init_hyperparameters(config)
         self.config=config
 
         environment_factory = partial(PygameTetris.get_environment, discrete_obs=False, render=False, scale=1)
         self.generator = Generator(num_environments=self.episodes_per_batch, max_timesteps_per_episode=self.max_timesteps_per_episode, environment_factory=environment_factory, gamma=self.gamma, device=device)
         channels, height, width = self.generator.get_observation_space()
+
         self.tetris_model = TetrisAgent(channels, height, width, self.generator.get_action_space()).to(device)
+        self.experiment = experiment
+        if load_model_from_experiment >= 0:
+            self.load_model(load_model_from_experiment)
         
         self.optim = Adam(self.tetris_model.parameters(), lr=self.lr)
         self.scaler = GradScaler(device)
@@ -124,6 +131,8 @@ class PPO():
                     # critic_loss.backward()
                     # self.critic_optim.step()
 
+            self.save_model()
+
     
     def _calc_advantages(self, rewards, values, episode_lengths):
         """Calculate Generalized Advantage Estimate (GAE), see https://arxiv.org/abs/1506.02438"""
@@ -185,3 +194,9 @@ class PPO():
 
     def close(self):
         self.generator.close()
+    
+    def load_model(self, experiment:int):
+        self.tetris_model.load_state_dict(torch.load(export_path + str(experiment) + ".pth"))
+
+    def save_model(self):
+        torch.save(self.tetris_model.state_dict(), export_path + str(self.experiment) + ".pth")

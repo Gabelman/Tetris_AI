@@ -4,7 +4,10 @@ import numpy as np
 from enum import Enum
 import copy
 
+import torch
+
 from environments.environment import Env
+from models.TetrisConvModel import TetrisAgent
 
 class Actions(Enum):
     NoAction = 0
@@ -415,9 +418,25 @@ class PygameTetris(Env):
 # No illegal move for rotation
 # No penalty for illegal moves
 
-def play_pygame(model):
+def play_pygame(model_path, speed=1): # currently only works for conv2d model
     game = PygameTetris(0, discrete_obs=False, render=True, scale=6)
     FPS = 64
+
+    observation_space = game.observation_space
+    action_space = game.action_space
+
+    human_player = False
+    if model_path:
+        model = TetrisAgent(*observation_space, action_space)
+        try:
+            model.load_state_dict(torch.load(model_path))
+            print("Loaded existing model to play.")
+        except FileNotFoundError:
+            print(f"Invalid path to model file: {model_path}.")
+            return
+    else:
+        human_player = True
+
 
     clock = pygame.time.Clock()
 
@@ -429,9 +448,7 @@ def play_pygame(model):
     #     ai_model.eval()
     #     agent = DQNAgent()
     #     agent.model = ai_model
-    human_player = False
-    if not model:
-        human_player = True
+
 
     running = True
     clock.tick(FPS)
@@ -460,15 +477,19 @@ def play_pygame(model):
                     game.apply_action(action)
                     game.render_screen()
         else:
-            action = model(obs) # TODO: must be correctly sampled
-            obs = game.step(action) # TODO: Implement toggle for train/play in step
-            game.render_screen()
+            pis = model.get_pis(obs) # TODO: must be correctly sampled
+            action = torch.argmax(pis).item()
+            # obs = game.step(action) # TODO: Implement toggle for train/play in step
+            # game.render_screen()
         
-        if frame_count % (FPS * 3) == 0:
+        if frame_count % (FPS * speed) == 0:
             obs, reward, terminated = game.step(action)
             print("obs: ")
             print(obs)
             print(f"reward: {reward}")
+            if terminated:
+                running = False
+
 
 
         clock.tick(FPS)  # Slower speed to observe AI's moves

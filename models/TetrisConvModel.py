@@ -73,3 +73,4 @@ class TetrisAgent(nn.Module):
         if len(obs.shape) == 3:
             return obs.unsqueeze(0)
         return obs
+    

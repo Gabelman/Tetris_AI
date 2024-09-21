@@ -84,7 +84,7 @@ class DQNAgent:
                 print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Epsilon: {self.epsilon:.2f}")
 
         # Final save
-        torch.save(self.model.state_dict(), "tetris_ai_model.pth")
+        torch.save(self.model.state_dict(), export_path + "tetris_ai_model.pth")
         self.save_memory()
 
     def sample_action(self, obs):

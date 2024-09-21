@@ -27,7 +27,8 @@ class Env(ABC):
     @property
     @abstractmethod
     def observation_space(self):
-        """Returns the amount of possible actions."""
+        """Returns the shape of the observation: (C, H, W) for indescrete models, (H * W + tetronimo.shape.flatten()) for discrete models.\n
+        The shape of tetronimo is taken to be a padded shape with (2, 4), hence the flattened shape is (8,)"""
 
     @staticmethod
     @abstractmethod
