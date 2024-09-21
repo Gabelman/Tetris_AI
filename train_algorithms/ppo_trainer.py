@@ -62,8 +62,8 @@ class PPO():
 
             print(f"=============\Iteration: {self.iteration}\ncurrent time steps: {current_timesteps}\n=============\n")
             episodic_return = torch.sum(batch_rews[batch_done_mask])
-            average_lengths = np.mean(batch_lengths)
-            std_lengths = np.std(batch_lengths)
+            current_average_lengths = np.mean(batch_lengths)
+            # std_lengths = np.std(batch_lengths)
             print(f"episodic return: {episodic_return}")
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
             for _ in tqdm(range(self.updates_per_iteration)):
