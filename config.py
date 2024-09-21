@@ -1,18 +1,19 @@
 class Config():
-    def __init__(self):
+    def __init__(self, episodes_per_batch = 32, max_timesteps_per_episode = 200, updates_per_iteration = 1, num_mini_batch_updates = 8, num_sub_mini_batches = 4, overall_timesteps = 10000, gamma = 0.95, epsilon = 0.2, lam = 0.94, lr = 1e-3, ):
         # learning params
-        self.episodes_per_batch = 32
-        self.max_timesteps_per_episode = 200
-        self.updates_per_iteration = 1
-        self.num_mini_batch_updates = 8
-        self.num_sub_mini_batches = 4
+        self.episodes_per_batch = episodes_per_batch
+        self.max_timesteps_per_episode = max_timesteps_per_episode
+        self.updates_per_iteration = updates_per_iteration
+        self.num_mini_batch_updates = num_mini_batch_updates
+        self.num_sub_mini_batches = num_sub_mini_batches
 
-        self.overall_timesteps = 10000
+        self.overall_timesteps = overall_timesteps
         # train
-        self.gamma = 0.95
-        self.epsilon = 0.2
-        self.lam = 0.94
-        self.lr = 1e-3
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.lam = lam
+        self.lr = lr
+
 
     def as_dict(self):
         dictionary = {

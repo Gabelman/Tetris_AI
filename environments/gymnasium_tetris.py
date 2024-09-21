@@ -1,5 +1,6 @@
 from environments.environment import Env
 import gymnasium as gym
+import warnings
 
 class GymnasiumTetris(Env):
     def __init__(self, discrete_obs, render):
@@ -36,7 +37,7 @@ class GymnasiumTetris(Env):
     @staticmethod
     def get_environment(seed=0, discrete_obs=False, render=False, scale=1):
         if seed != 0:
-            raise UserWarning("Gymnasium environment was seeded, but seeds have no effect.")
+            warnings.warn("Gymnasium environment was seeded, but seeds have no effect.")
         return GymnasiumTetris(discrete_obs=discrete_obs, render=render)
 
 

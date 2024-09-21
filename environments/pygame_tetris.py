@@ -108,8 +108,8 @@ class PygameTetris(Env):
         self.ROWS = 20
         self.GRID_SIZE = 5 * self.SCALE
 
-        self.grid = self.generate_grid()
-        self.static_grid = self.generate_grid()
+        self.grid = self.generate_grid() # This will keep track of the tiles that are set in place and the current moving tile. Observation are generated from here.
+        self.static_grid = self.generate_grid() # This will keep track of the tiles that are set in place.
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
@@ -275,7 +275,7 @@ class PygameTetris(Env):
         
         return bumpiness
 
-    def count_holes(self, grid) -> int:
+    def count_holes(self) -> int:
         """
         Returns the amount of holes. Holes are defined as follows:\n
         - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
@@ -294,24 +294,24 @@ class PygameTetris(Env):
         for row in range(self.ROWS):
             # block_found = False
             for col in range(self.COLUMNS):
-                if grid[row][col]:
+                if self.static_grid[row][col]:
                     continue
                 left_open = True
                 up_open = True
                 if col > 0:
-                    if grid[row][col - 1]:
+                    if self.static_grid[row][col - 1]:
                         left_open = False
                     elif holes_table[row][col - 1] > 0:
                         left_open = False
                         holes_table[row][col] = holes_table[row][col - 1]
                 if row > 0:
-                    if grid[row - 1][col] or holes_table[row - 1][col] > 0:
+                    if self.static_grid[row - 1][col] or holes_table[row - 1][col] > 0:
                         up_open = False
                 if up_open: #opening on top found
                     holes_table[row][col] = 0
                 if not up_open and not left_open:
                     holes_table[row][col] += 1
-                    if col + 1 >= self.COLUMNS or grid[row][col + 1]:
+                    if col + 1 >= self.COLUMNS or self.static_grid[row][col + 1]:
                         hole_count += holes_table[row][col]
                     
         return hole_count

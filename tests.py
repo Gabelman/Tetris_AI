@@ -10,12 +10,13 @@ pygame.init()
 
 class TestTetris(unittest.TestCase):
     
+    
 
     def test_obs_space(self):
         env = PygameTetris.get_environment()
         space = env.observation_space
         print(space)
-
+        
 #     def test_count_holes(self):
 #         tetris = PygameTetris(0)
 #         grid1 = [[0,0,0,0,0,0,0,0,0,0,],
