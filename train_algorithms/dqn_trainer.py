@@ -7,8 +7,11 @@ import numpy as np
 from collections import deque
 import pickle
 
-from Environments.pygame_tetris import PygameTetris, Actions
+from environments.pygame_tetris import PygameTetris, play_pygame
 from models.tetris_discrete_model import TetrisAI
+from generator import Generator
+
+from functools import partial
 
 # Initialize Pygame
 pygame.init()
@@ -20,8 +23,12 @@ class DQNAgent:
         self.model = TetrisAI()
         self.target_model = TetrisAI()
         self.target_model.load_state_dict(self.model.state_dict())
+
+        # torch stuff
         self.optimizer = optim.Adam(self.model.parameters())
         self.loss_fn = nn.MSELoss()
+
+        # train parameters
         self.memory = deque(maxlen=10000)
         self.batch_size = 32
         self.gamma = 0.99
@@ -29,21 +36,62 @@ class DQNAgent:
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
 
+        # environments
+        # environment_factory = partial(PygameTetris.get_environment, discrete_obs=True)
+        # self.generator = Generator(num_environments=1, max_timesteps_per_episode=100, environment_factory=environment_factory)
+        seed = 0
+        self.environment = PygameTetris(seed)
 
-    def get_state(self, grid, tetromino):
-        state = np.array(grid).flatten()
-        holes = count_holes(grid)
-        bumpiness = calculate_bumpiness(grid)
-        height = calculate_height(grid)
-        lines_clearable = count_clearable_lines(grid)
-        state = np.append(state, [tetromino.x, tetromino.y, len(tetromino.shape), len(tetromino.shape[0]), holes, bumpiness, height, lines_clearable]) 
-        return torch.FloatTensor(state)
+    def train(self, continue_training=False):
+        
+        if continue_training:
+            try:
+                self.model.load_state_dict(torch.load(export_path + "tetris_ai_model.pth"))
+                self.target_model.load_state_dict(torch.load(export_path + "tetris_ai_model.pth"))
+                self.load_memory()
+                print("Loaded existing model and memory for continued training.")
+            except FileNotFoundError:
+                print("No existing model or memory found. Starting training from scratch.")
+        
+        num_episodes = 1000
+        update_target_every = 100
 
-    def act(self, state):
+        for episode in range(num_episodes):
+            game_over = False
+            total_reward = 0
+            
+            obs = self.environment.reset()
+
+            while not game_over:
+
+                action = self.sample_action(obs)
+                next_obs, reward, terminated = self.environment.step(action)
+                
+                self.remember(obs, action, reward, next_obs, terminated)
+                self.replay()
+                obs = next_obs
+
+                game_over = terminated
+
+            if episode % update_target_every == 0:
+                self.update_target_model()
+
+            if episode % 1 == 0:  # Save every 1 episodes
+                torch.save(self.model.state_dict(), export_path + "tetris_ai_model.pth")
+                self.save_memory()
+                # TODO: reimplement getting information from the environment. See: lines_cleared
+                # print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Lines Cleared: {lines_cleared}, Epsilon: {agent.epsilon:.2f}")
+                print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Epsilon: {self.epsilon:.2f}")
+
+        # Final save
+        torch.save(self.model.state_dict(), "tetris_ai_model.pth")
+        self.save_memory()
+
+    def sample_action(self, obs):
         if random.random() <= self.epsilon:
             return random.randint(0, 3)
         with torch.no_grad():
-            q_values = self.model(state)
+            q_values = self.model(obs)
             return torch.argmax(q_values).item()
 
     def remember(self, state, action, reward, next_state, done):
@@ -90,144 +138,10 @@ class DQNAgent:
         except FileNotFoundError:
             print("No existing memory file found.")
 
-def train_ai(continue_training=False):
-    agent = DQNAgent()
-    
-    if continue_training:
-        try:
-            agent.model.load_state_dict(torch.load(export_path + "tetris_ai_model.pth"))
-            agent.target_model.load_state_dict(torch.load(export_path + "tetris_ai_model.pth"))
-            agent.load_memory()
-            print("Loaded existing model and memory for continued training.")
-        except FileNotFoundError:
-            print("No existing model or memory found. Starting training from scratch.")
-    
-    num_episodes = 1000
-    update_target_every = 100
 
-    game = PygameTetris()
-    for episode in range(num_episodes):
-        grid = [[0 for _ in range(COLUMNS)] for _ in range(ROWS)]
-        current_tetromino = Tetromino(random.choice(SHAPES))
-        next_tetromino = Tetromino(random.choice(SHAPES))
-        game_over = False
-        total_reward = 0
-        lines_cleared = 0  # Initialize lines cleared for this episode
-
-        while not game_over:
-            state = agent.get_state(grid, current_tetromino)
-            action = agent.act(state)
-
-            # Apply action
-            if action == 0:  # Move left
-                current_tetromino.x -= 1
-                if current_tetromino.collision(grid):
-                    current_tetromino.x += 1
-            elif action == 1:  # Move right
-                current_tetromino.x += 1
-                if current_tetromino.collision(grid):
-                    current_tetromino.x -= 1
-            elif action == 2:  # Rotate
-                current_tetromino.rotate(grid)
-
-            # Move tetromino down
-            current_tetromino.y += 1
-            if current_tetromino.collision(grid):
-                current_tetromino.y -= 1
-                height_placed = current_tetromino.y
-                current_tetromino.lock(grid)
-                lines_cleared += clear_lines(grid)  # Count lines cleared
-                reward = calculate_reward(grid, lines_cleared, height_placed)
-                total_reward += reward
-
-                current_tetromino = next_tetromino
-                next_tetromino = Tetromino(random.choice(SHAPES))
-
-                if check_game_over(grid, current_tetromino):
-                    game_over = True
-                    reward -= 500  # Larger penalty for game over
-            else:
-                reward = -0.01  # Small penalty for each move
-
-            next_state = agent.get_state(grid, current_tetromino)
-            agent.remember(state, action, reward, next_state, game_over)
-            agent.replay()
-
-        if episode % update_target_every == 0:
-            agent.update_target_model()
-
-        if episode % 1 == 0:  # Save every 1 episodes
-            torch.save(agent.model.state_dict(), export_path + "tetris_ai_model.pth")
-            agent.save_memory()
-            print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Lines Cleared: {lines_cleared}, Epsilon: {agent.epsilon:.2f}")
-
-    # Final save
-    torch.save(agent.model.state_dict(), "tetris_ai_model.pth")
-    agent.save_memory()
-
-def play_ai(human_player=True):
-    game = PygameTetris(0, discrete_obs=False, render=True, scale=6)
-    FPS = 64
-
-    clock = pygame.time.Clock()
-
-    obs = game.reset()
-    if not human_player:
-
-        ai_model = TetrisAI()
-        ai_model.load_state_dict(torch.load("tetris_ai_model.pth"))
-        ai_model.eval()
-        agent = DQNAgent()
-        agent.model = ai_model
-
-    running = True
-    clock.tick(FPS)
-    frame_count = 0
-
-    while running:
-        frame_count += 1
-        action = Actions.NoAction
-        if human_player:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    running = False
-                    break
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_LEFT:
-                        action = Actions.MoveLeft
-                    elif event.key == pygame.K_RIGHT:
-                        action = Actions.MoveRight
-                    elif event.key == pygame.K_e:
-                        action = Actions.RotateClock
-                    elif event.key == pygame.K_q:
-                        action = Actions.RotateCClock
-                    elif event.key == pygame.K_DOWN:
-                        action = Actions.MoveDown
-                    game.apply_action(action)
-                    game.render_screen()
-        else:
-            # state = agent.get_state(grid, current_tetromino)
-            # action = agent.act(state)
-            pass
-        
-        if frame_count % (FPS * 3) == 0:
-            obs, reward, terminated = game.step(action)
-            print("obs: ")
-            print(obs)
-            print(f"reward: {reward}")
-
-
-        clock.tick(FPS)  # Slower speed to observe AI's moves
-
-        # for event in pygame.event.get():
-        #     if event.type == pygame.QUIT:
-        #         running = False
-
-    pygame.quit()
 
 if __name__ == "__main__":
-    play_ai()
+    play_pygame(None)
     # try:
     #     choice = input("Enter 'train' to train the AI or 'play' to watch the AI play: ")
     #     if choice.lower() == 'train':

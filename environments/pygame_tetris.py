@@ -232,7 +232,7 @@ class PygameTetris(Env):
         reward = 0
         reward += lines_cleared ** 2 * 50
         reward += (self.ROWS - height_placed) / 10
-        reward -= self.count_holes(self.static_grid) * 2
+        reward -= self.count_holes() * 2
         # TODO: the issue here is that landing a tile incidentally gives negative reward. Maybe bumpiness and height need to be adjusted with a certain "gold standard".
         reward -= self.calculate_bumpiness(self.static_grid) * 0.5
         reward -= self.calculate_height() * 0.2
@@ -416,3 +416,67 @@ class PygameTetris(Env):
 # rotation only works in one direction
 # No illegal move for rotation
 # No penalty for illegal moves
+
+def play_pygame(model):
+    game = PygameTetris(0, discrete_obs=False, render=True, scale=6)
+    FPS = 64
+
+    clock = pygame.time.Clock()
+
+    obs = game.reset()
+    # if not human_player:
+
+    #     ai_model = TetrisAI()
+    #     ai_model.load_state_dict(torch.load("tetris_ai_model.pth"))
+    #     ai_model.eval()
+    #     agent = DQNAgent()
+    #     agent.model = ai_model
+    human_player = False
+    if not model:
+        human_player = True
+
+    running = True
+    clock.tick(FPS)
+    frame_count = 0
+
+    while running:
+        frame_count += 1
+        action = Actions.NoAction
+        if human_player:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    running = False
+                    break
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_LEFT:
+                        action = Actions.MoveLeft
+                    elif event.key == pygame.K_RIGHT:
+                        action = Actions.MoveRight
+                    elif event.key == pygame.K_e:
+                        action = Actions.RotateClock
+                    elif event.key == pygame.K_q:
+                        action = Actions.RotateCClock
+                    elif event.key == pygame.K_DOWN:
+                        action = Actions.MoveDown
+                    game.apply_action(action)
+                    game.render_screen()
+        else:
+            action = model(obs) # TODO: must be correctly sampled
+            obs = game.step(action) # TODO: Implement toggle for train/play in step
+            game.render_screen()
+        
+        if frame_count % (FPS * 3) == 0:
+            obs, reward, terminated = game.step(action)
+            print("obs: ")
+            print(obs)
+            print(f"reward: {reward}")
+
+
+        clock.tick(FPS)  # Slower speed to observe AI's moves
+
+        # for event in pygame.event.get():
+        #     if event.type == pygame.QUIT:
+        #         running = False
+
+    pygame.quit()
