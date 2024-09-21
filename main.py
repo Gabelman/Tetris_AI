@@ -1,4 +1,4 @@
-from PPO import PPO
+from train_algorithms.ppo_trainer import PPO
 # import gymnasium as gym
 # import wandb
 import torch

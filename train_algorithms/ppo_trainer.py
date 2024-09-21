@@ -1,28 +1,29 @@
 import torch
 from torch import nn
-from torch.distributions import Categorical
 from torch.optim import Adam
 from torch.amp import GradScaler, autocast
 import numpy as np
-
-from gymnasium import Env
 
 from tqdm import tqdm
 # import wandb
 
 from generator import Generator
-from TetrisConvModel import TetrisAgent
+from models.TetrisConvModel import TetrisAgent
+from environments.pygame_tetris import PygameTetris
 from utils import get_batch_idx
 from config import Config
+
+from functools import partial
 
 class PPO():
     def __init__(self, device, config: Config) -> None:
         self.init_hyperparameters(config)
         self.config=config
 
-        
-        self.generator = Generator(max_timesteps_per_episode=self.max_timesteps_per_episode, num_environments=self.episodes_per_batch, device=device, gamma=self.gamma)
-        self.tetris_model = TetrisAgent(self.generator.get_observation_space(), self.generator.get_action_space()).to(device)
+        environment_factory = partial(PygameTetris.get_environment, discrete_obs=False, render=False, scale=1)
+        self.generator = Generator(num_environments=self.episodes_per_batch, max_timesteps_per_episode=self.max_timesteps_per_episode, environment_factory=environment_factory, gamma=self.gamma, device=device)
+        channels, height, width = self.generator.get_observation_space()
+        self.tetris_model = TetrisAgent(channels, height, width, self.generator.get_action_space()).to(device)
         
         self.optim = Adam(self.tetris_model.parameters(), lr=self.lr)
         self.scaler = GradScaler(device)

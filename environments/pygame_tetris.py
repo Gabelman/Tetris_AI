@@ -4,7 +4,7 @@ import numpy as np
 from enum import Enum
 import copy
 
-from environment import Env
+from environments.environment import Env
 
 class Actions(Enum):
     NoAction = 0
@@ -113,7 +113,10 @@ class PygameTetris(Env):
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
-        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        if render:
+            self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        else:
+            self.screen = pygame.Surface((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
         self.render = render
 
     
@@ -121,7 +124,7 @@ class PygameTetris(Env):
         # self.reset_screen()
         
         # Return values
-        obs = pygame.surfarray.array3d(self.screen)
+        obs = np.zeros(self.observation_space)
         reward = 0
         terminated = False
         # truncated = False
@@ -168,6 +171,7 @@ class PygameTetris(Env):
 
     def reset(self):
         self.grid = self.generate_grid()
+        self.static_grid = self.generate_grid()
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
@@ -330,6 +334,7 @@ class PygameTetris(Env):
             obs = np.hstack((grid_flattened, tetromino_flattened))
         else:
             obs = pygame.surfarray.array3d(self.screen)
+            obs = self.reshape_obs(obs)
         return obs
     
     def _reset_screen(self):
@@ -380,6 +385,29 @@ class PygameTetris(Env):
     def _init_rewards(self):
         self.action_penalty = 3e-4
         self.step_reward = 1e-3
+
+    @property
+    def action_space(self):
+        return len(Actions)
+    
+    def close(self):
+        pygame.quit()
+
+    @property
+    def observation_space(self):
+        if self.discrete_obs:
+            grid_flattened_size = np.array(self.grid).flatten().shape
+            tetromino_flattened_size = shape_to_numpy(self.next_tetromino.shape).flatten().shape
+            return (grid_flattened_size[0] + tetromino_flattened_size[0], )
+        else:
+            obs_space = pygame.surfarray.array3d(self.screen).shape # (W, H, C)
+            obs_space = (obs_space[2], obs_space[1], obs_space[0]) # (C, H, W) for conv2d layer
+            return obs_space
+
+    @staticmethod
+    def get_environment(seed=0, discrete_obs=False, render=False, scale=1):
+        return PygameTetris(seed, discrete_obs, render=render, scale=scale)
+
 
 
 # potential buggy things so far:

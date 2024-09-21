@@ -3,21 +3,40 @@ from tqdm import tqdm
 import gymnasium as gym
 
 from torch.distributions import Categorical
+import numpy as np
+
+from enum import Enum
 
 from utils import get_batch_idx
-from TetrisConvModel import TetrisAgent
+from models.TetrisConvModel import TetrisAgent
+
+from environments.environment import Env
+from typing import Callable
+
 
 class Generator():
-    def __init__(self, num_environments, max_timesteps_per_episode, device, gamma):
+    def __init__(self, num_environments, max_timesteps_per_episode, environment_factory: Callable[[int, bool, bool, int], Env], gamma, device):
+        """
+        Creates a Generator class to sample observations from environments.
+        Arguments:
+            num_environments(int): Number of environments to create and sample from.
+            max_timesteps_per_episode(int): Number of timesteps done on each environment for a sample.
+            environment_factory(Callable[[int]]): Takes a partial function from environments.environment get_environment(), such that only seed must be input.
+            gamma(float): Value to control weight of accumulated reward (reward to go).
+            device(str): Device onto which tensors are loaded.
+        """
         self.max_timesteps_per_episode = max_timesteps_per_episode
         self.num_environments = num_environments
-        self.environments = [gym.make("ALE/Tetris-v5") for _ in range(num_environments)]
-        self.last_observations = [env.reset()[0] for env in self.environments]
+
+        self.environment_seeds = [np.random.randint(0, 2**32 - 1) for _ in range(num_environments)]
+        self.environments: list[Env] = [environment_factory(seed) for seed in self.environment_seeds]
+        self.last_observations = [env.reset() for env in self.environments]
+        self.action_space = self.environments[0].action_space
+        self.observation_space = self.environments[0].observation_space
+        
         self.environments_done = [False for _ in range(num_environments)]
 
 
-        self.action_space = self.environments[0].action_space.n # this is specifically for openAI gymnasium. Might as well be = 5
-        self.observation_space = self.environments[0].observation_space.shape
         self.device = device
         self.gamma = gamma # reward calculation
 
@@ -34,14 +53,12 @@ class Generator():
         batch_done_mask = torch.full((self.num_environments * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
         batch_episode_lengths = []
 
-        #reshape obs-space from (widht, height, channels) to (channels, height, width) (keeping batch size the same)
-        batch_obs = torch.einsum("nwhc->nchw", batch_obs)
         # print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
         for i in tqdm(range(self.num_environments)):
-            current_env = self.environments[i]
+            current_env: Env = self.environments[i]
 
             if self.environments_done[i]:
-                obs, _ = current_env.reset()
+                obs = current_env.reset()
             else:
                 obs = self.last_observations[i]
 
@@ -50,21 +67,17 @@ class Generator():
                 with torch.no_grad():
                     batch_done_mask[idx] = True
 
-                    # Change obs shape to: (channels, H, W), which is needed for conv-layers
-                    obs = torch.tensor(obs).to(self.device, dtype=torch.float)
-                    obs = torch.einsum("ijk->kji", obs) 
-                    batch_obs[idx,:,:,:] = obs
-
-                    obs = obs.unsqueeze(0) # batch_size (N) = 1
+                    obs = self.obs_to_tensor(obs)
+                    
                     pi = model.get_pis(obs)
                     action, log_prob = self.sample_action(pi)
 
-
+                    batch_obs[idx] = obs
                     batch_actions[idx] = action
                     batch_log_probs[idx] = log_prob
 
-                    obs, reward, terminated, truncated, _ = current_env.step(action)
-                    self.environments_done[i] = terminated or truncated
+                    obs, reward, done = current_env.step(action)
+                    self.environments_done[i] = done
 
                     batch_rewards[idx] = reward + self.step_reward
 
@@ -96,6 +109,9 @@ class Generator():
     
     def get_observation_space(self):
         return self.observation_space
+
+    def obs_to_tensor(self, obs):
+        return torch.tensor(obs).to(self.device, dtype=torch.float)
 
     @staticmethod
     def sample_action(logits):

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 # import numpy as np
 import gymnasium as gym
+from torch import Tensor
 
 # env = gym.make("ALE/Tetris-v5")
 # observation, _ = env.reset()
@@ -33,35 +34,42 @@ class InitialImageEmbed(nn.Module):
         return x
 
 class TetrisAgent(nn.Module):
-    def __init__(self, observation_space, output_dim):
+    def __init__(self, C, H, W, output_dim):
         super().__init__()
         kernel_depth = 8  # 8 chosen arbitratily at this point
         kernel_depth2 = 4
-        board_width, board_height, board_channels = observation_space
-        self.board_embed = InitialImageEmbed(kernel_depth, board_width, board_height, board_channels)
+        self.board_embed = InitialImageEmbed(kernel_depth, W, H, C)
 
         self.network_head = nn.Sequential(
             nn.Conv2d(kernel_depth, kernel_depth2, 1), # Sum over Embeddings. This may as well be a fully connected linear layer. However, in that case BatchNorm2d couldn't be applied the same way.
             nn.BatchNorm2d(kernel_depth2),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
             nn.ReLU(),
-            nn.Linear(kernel_depth2 * board_height * board_width, output_dim)
+            nn.Linear(kernel_depth2 * H * W, output_dim)
         )
         self.value_head = nn.Sequential(
             nn.Conv2d(kernel_depth, kernel_depth2, 1), # Sum over Embeddings
             nn.BatchNorm2d(kernel_depth2),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
             nn.ReLU(),
-            nn.Linear(kernel_depth2 * board_height * board_width, 1)
+            nn.Linear(kernel_depth2 * H * W, 1)
         )
 
     def forward(self, obs):
+        obs = self.add_batch_dimension(obs)
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
         v = self.value_head(initial_embed)
         return pi, v
     
     def get_pis(self, obs):
+        obs = self.add_batch_dimension(obs)
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
         return pi
+    
+    @staticmethod
+    def add_batch_dimension(obs: Tensor):
+        if len(obs.shape) == 3:
+            return obs.unsqueeze(0)
+        return obs
