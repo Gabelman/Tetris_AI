@@ -126,7 +126,8 @@ class PygameTetris(Env):
 
     
     def step(self, action: Actions):
-
+        if isinstance(action, int):
+            action = Actions(action)
         # Return values
         obs = np.zeros(self.observation_space)
         reward = 0
