@@ -113,6 +113,8 @@ class PygameTetris(Env):
 
         self.grid = self.generate_grid() # This will keep track of the tiles that are set in place and the current moving tile. Observation are generated from here.
         self.static_grid = self.generate_grid() # This will keep track of the tiles that are set in place.
+        
+        random.seed(seed)
         self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
         self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
@@ -442,16 +444,11 @@ def play_pygame(model_file, device, speed=1, scale=1): # currently only works fo
     clock = pygame.time.Clock()
 
     obs = game.reset()
-    # if not human_player:
-
-    #     ai_model = TetrisAI()
-    #     ai_model.load_state_dict(torch.load("tetris_ai_model.pth"))
-    #     ai_model.eval()
-    #     agent = DQNAgent()
-    #     agent.model = ai_model
-
 
     running = True
+    if not human_player:
+        FPS = 2
+    
     clock.tick(FPS)
     frame_count = 0
 
@@ -478,19 +475,26 @@ def play_pygame(model_file, device, speed=1, scale=1): # currently only works fo
                     game.apply_action(action)
                     game.render_screen()
         else:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    running = False
+                    break
             pis = model.get_pis(obs) # TODO: must be correctly sampled
             action = torch.argmax(pis).item()
+            print(f"action: {action}")
             # obs = game.step(action) # TODO: Implement toggle for train/play in step
             # game.render_screen()
-        
-        if frame_count % (FPS * speed) == 0:
+        if human_player:
+            if frame_count % (FPS * speed) == 0:
+                obs, reward, terminated = game.step(action)
+                # print("obs: ")
+                # print(obs)
+                # print(f"reward: {reward}")
+        else:
             obs, reward, terminated = game.step(action)
-            print("obs: ")
-            print(obs)
-            print(f"reward: {reward}")
-            if terminated:
-                running = False
-
+        if terminated:
+            running = False
 
 
         clock.tick(FPS)  # Slower speed to observe AI's moves

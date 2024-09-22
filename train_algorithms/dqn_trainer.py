@@ -142,18 +142,4 @@ class DQNAgent:
 
 if __name__ == "__main__":
     play_pygame(None)
-    # try:
-    #     choice = input("Enter 'train' to train the AI or 'play' to watch the AI play: ")
-    #     if choice.lower() == 'train':
-    #         train_ai(continue_training=True)
-    #     elif choice.lower() == 'play':
-    #         play_ai()
-    #     else:
-    #         print("Invalid choice. Please enter 'train' or 'play'.")
-    # except EOFError:
-    #     print("No input received. Defaulting to training mode.")
-    #     train_ai(continue_training=True)
-    # except KeyboardInterrupt:
-    #     print("\nProgram interrupted by user. Exiting.")
-    # except Exception as e:
-    #     print(f"An unexpected error occurred: {e}")
+    
