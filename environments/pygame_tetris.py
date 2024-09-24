@@ -446,6 +446,7 @@ def play_pygame(model_file, device, speed=1, scale=1): # currently only works fo
 
     obs = game.reset()
 
+    game_over = False
     running = True
     if not human_player:
         FPS = 2
@@ -487,14 +488,14 @@ def play_pygame(model_file, device, speed=1, scale=1): # currently only works fo
             # obs = game.step(action) # TODO: Implement toggle for train/play in step
             # game.render_screen()
         if human_player:
-            if frame_count % (FPS * speed) == 0:
-                obs, reward, terminated = game.step(action)
+            if frame_count % (FPS // speed) == 0:
+                obs, reward, game_over = game.step(action)
                 # print("obs: ")
                 # print(obs)
                 # print(f"reward: {reward}")
         else:
-            obs, reward, terminated = game.step(action)
-        if terminated:
+            obs, reward, game_over = game.step(action)
+        if game_over:
             running = False
 
 
