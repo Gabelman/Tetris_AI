@@ -28,7 +28,7 @@ class Generator():
         self.max_timesteps_per_episode = max_timesteps_per_episode
         self.num_environments = num_environments
 
-        self.environment_seeds = [np.random.randint(0, 2**32 - 1) for _ in range(num_environments)]
+        self.environment_seeds = [np.random.randint(0, 2**31) for _ in range(num_environments)]
         self.environments: list[Env] = [environment_factory(seed) for seed in self.environment_seeds]
         self.last_observations = [env.reset() for env in self.environments]
         self.action_space = self.environments[0].action_space
