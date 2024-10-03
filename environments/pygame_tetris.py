@@ -400,7 +400,7 @@ class PygameTetris(Env):
             self.game_over_penalty = config.game_over_penalty
         else:
             self.line_clear_reward = 50
-            self.hight_place_reward = 0.3
+            self.height_place_reward = 0.3
             self.height_penalty = 0.2
             self.bumpiness_penalty = 0.5
             self.hole_penalty = 2
