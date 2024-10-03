@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.optim import Adam
 from torch.amp import GradScaler, autocast
+from torch.distributions import Categorical
 import numpy as np
 
 from tqdm import tqdm
@@ -160,10 +161,12 @@ class PPO():
 
     def evaluate(self, batch_obs, batch_acts):
         pi, v = self.tetris_model(batch_obs)
+        pi = Categorical(logits=pi)
         v = v.squeeze()
         # V = self.critic(batch_obs).squeeze()
         # log_probs = self.actor(batch_obs)
-        pi = pi[torch.arange(pi.size(0)), batch_acts] # select only probs of actions taken. torch.arange(...) selects all rows, batch_acts selects the appropriate actions for each row (timestep over different episodes).
+        pi = pi.log_prob(batch_acts)
+        # pi = pi[torch.arange(pi.size(0)), batch_acts] # select only probs of actions taken. torch.arange(...) selects all rows, batch_acts selects the appropriate actions for each row (timestep over different episodes).
         return v, pi
 
     
