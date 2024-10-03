@@ -20,7 +20,7 @@ class TestTetris(unittest.TestCase):
 
     def test_generator_env(self):
         config = Config(episodes_per_batch=40)
-        trainer = PPO('cpu', config)
+        trainer = PPO('cpu', config, experiment=1)
         self.assertEqual(40, len(trainer.generator.environments))
 
     def test_generator_env2(self):
