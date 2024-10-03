@@ -42,7 +42,7 @@ class PPO():
         self.update_size = self.batch_size // self.num_mini_batch_updates
         self.mini_batch_size = self.update_size // self.num_sub_mini_batches
         self.device = device
-        wandb.init(project="TetrisRenforcementLearning", name="pygame and ppo", config=config.to_dict())
+        wandb.init(project="TetrisRenforcementLearning", name=f"pygame and ppo {self.experiment}", config=config.to_dict())
         
     def train(self, total_timesteps):
         current_timesteps = 0
@@ -76,6 +76,8 @@ class PPO():
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
             for _ in tqdm(range(self.updates_per_iteration)):
                 update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size))
+                acc_loss = 0
+                # acc_act_loss = 0
                 for update_idcs in update_batch_idcs:
                     self.optim.zero_grad()
 
@@ -114,12 +116,14 @@ class PPO():
                         loss = actor_loss  + value_loss # maximize actor_loss and minimize value_loss
 
                         loss /= self.num_sub_mini_batches
+                        acc_loss += loss
+
 
                         self.scaler.scale(loss).backward(retain_graph=False)
                     
-
-                    self.scaler.unscale_(self.optim)
-                    torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
+                    wandb.log({"loss_per_iteration": acc_loss})
+                    # self.scaler.unscale_(self.optim)
+                    # torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
                     
                     self.scaler.step(self.optim)
                     self.scaler.update()
