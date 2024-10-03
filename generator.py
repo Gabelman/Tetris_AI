@@ -62,7 +62,8 @@ class Generator():
             else:
                 obs = self.last_observations[i]
 
-            for t_ep in tqdm(range(self.max_timesteps_per_episode)):
+            iterator = tqdm(range(self.max_timesteps_per_episode))
+            for t_ep in iterator:
                 idx = get_batch_idx(self.max_timesteps_per_episode, i, t_ep) # In order to insert values into "flattened" tensors immediately
                 with torch.no_grad():
                     batch_done_mask[idx] = True
@@ -83,6 +84,7 @@ class Generator():
 
                 self.last_observations[i] = obs
                 if self.environments_done[i]:
+                    iterator.close()
                     break
             batch_episode_lengths.append(t_ep + 1)
 
