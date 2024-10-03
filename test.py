@@ -6,6 +6,7 @@ from train_algorithms.ppo_trainer import PPO
 from config import Config
 from functools import partial
 from generator import Generator
+import random
 
 from grids import *
 
@@ -71,6 +72,14 @@ class TestTetris(unittest.TestCase):
         tetris.grid = grid10
         tetris.clear_lines()
         self.assertEqual(grid10, grid_gold10)
+
+
+    
+    def test_action_space(self):
+        env = PygameTetris.get_environment()
+        action_space_size = env.action_space
+        action = random.randint(0, action_space_size -1)
+        self.assertIn(action, range(action_space_size))
 
 if __name__ == '__main__':
     unittest.main()
