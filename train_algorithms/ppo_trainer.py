@@ -23,7 +23,7 @@ class PPO():
         self.init_hyperparameters(config)
         self.config=config
 
-        environment_factory = partial(PygameTetris.get_environment, discrete_obs=False, render=False, scale=1)
+        environment_factory = partial(PygameTetris.get_environment, discrete_obs=False, render=False, scale=1, config=config)
         self.generator = Generator(num_environments=self.episodes_per_batch, max_timesteps_per_episode=self.max_timesteps_per_episode, environment_factory=environment_factory, gamma=self.gamma, device=device)
         channels, height, width = self.generator.get_observation_space()
 

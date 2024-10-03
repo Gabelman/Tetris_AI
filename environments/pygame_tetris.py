@@ -8,6 +8,8 @@ import torch
 
 from environments.environment import Env
 from models.TetrisConvModel import TetrisAgent
+from models.tetris_discrete_model import TetrisAI
+from config import Config
 
 class Actions(Enum):
     NoAction = 0
@@ -98,8 +100,8 @@ class Tetromino:
 
 
 class PygameTetris(Env):
-    def __init__(self, seed, discrete_obs=True, render=False, scale=1):
-        self._init_rewards()
+    def __init__(self, seed, discrete_obs=True, render=False, scale=1, config: Config = None):
+        self._init_rewards(config)
         self.random_seed = seed #TODO   
         self.discrete_obs = discrete_obs
         # Screen dimensions with extra width for the preview
@@ -139,8 +141,9 @@ class PygameTetris(Env):
         # elif action == Actions.NoAction:
         #     reward += self.action_penalty
         
-        if not self.apply_action(action):
-            reward -= 50
+        # if not self.apply_action(action):
+        #     reward -= 50
+        self.apply_action(action)
 
         if self.current_tetromino.is_colliding(self.static_grid, (1, 0)):
             self.update_grid(self.static_grid, self.current_tetromino, None)
@@ -155,7 +158,7 @@ class PygameTetris(Env):
             if self.check_game_over(self.current_tetromino):
                 print("Game Over!")
                 terminated = True
-                reward -= 500
+                reward -= self.game_over_penalty
                 return obs, reward, terminated
             reward += self.calculate_reward(lines_cleared, height_placed)
         else:
@@ -234,12 +237,12 @@ class PygameTetris(Env):
     # Reward stuff
     def calculate_reward(self, lines_cleared, height_placed):
         reward = 0
-        reward += lines_cleared ** 2 * 50
-        reward += (self.ROWS - height_placed) / 10
-        reward -= self.count_holes() * 2
+        reward += lines_cleared ** 2 * self.line_clear_reward
+        reward += (self.ROWS - height_placed) * self.height_place_reward
+        reward -= self.count_holes() * self.hole_penalty
         # TODO: the issue here is that landing a tile incidentally gives negative reward. Maybe bumpiness and height need to be adjusted with a certain "gold standard".
-        reward -= self.calculate_bumpiness(self.static_grid) * 0.5
-        reward -= self.calculate_height() * 0.2
+        reward -= self.calculate_bumpiness(self.static_grid) * self.bumpiness_penalty
+        reward -= self.calculate_height() * self.height_penalty
         '''# Penalty for height differences
         for i in range(COLUMNS - 1):
             height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
@@ -386,9 +389,24 @@ class PygameTetris(Env):
     def generate_grid(self):
         return [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
     
-    def _init_rewards(self):
-        self.action_penalty = 3e-4
-        self.step_reward = 1e-3
+    def _init_rewards(self, config: Config = None):
+        if config:
+            self.line_clear_reward = config.line_clear_reward
+            self.height_place_reward = config.height_place_reward
+            self.height_penalty = config.height_penalty
+            self.bumpiness_penalty = config.bumpiness_penalty
+            self.hole_penalty = config.hole_penalty
+            self.step_reward = config.step_reward
+            self.game_over_penalty = config.game_over_penalty
+        else:
+            self.line_clear_reward = 50
+            self.hight_place_reward = 0.3
+            self.height_penalty = 0.2
+            self.bumpiness_penalty = 0.5
+            self.hole_penalty = 2
+            self.game_over_penalty = 500
+            # self.action_penalty = 3e-4
+            self.step_reward = 1e-3
 
     @property
     def action_space(self):
@@ -409,8 +427,8 @@ class PygameTetris(Env):
             return obs_space
 
     @staticmethod
-    def get_environment(seed=0, discrete_obs=False, render=False, scale=1):
-        return PygameTetris(seed, discrete_obs, render=render, scale=scale)
+    def get_environment(seed=0, discrete_obs=False, render=False, scale=1, config: Config = None):
+        return PygameTetris(seed, discrete_obs, render=render, scale=scale, config=config)
 
 
 
@@ -430,7 +448,9 @@ def play_pygame(model_file, device, speed=1, scale=1): # currently only works fo
 
     human_player = False
     if model_file:
+
         model = TetrisAgent(*observation_space, action_space, device)
+        # model = TetrisAI()
         model.to(device)
         try:
             model.load_state_dict(torch.load("exports/" + model_file, map_location=device))

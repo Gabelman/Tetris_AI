@@ -1,5 +1,13 @@
 class Config():
-    def __init__(self, episodes_per_batch = 32, max_timesteps_per_episode = 200, updates_per_iteration = 1, num_mini_batch_updates = 8, num_sub_mini_batches = 4, overall_timesteps = 10000, gamma = 0.95, epsilon = 0.2, lam = 0.94, lr = 1e-3, ):
+    def __init__(self,
+                episodes_per_batch = 32, max_timesteps_per_episode = 200,
+                updates_per_iteration = 1, num_mini_batch_updates = 8,
+                num_sub_mini_batches = 4, overall_timesteps = 10000,
+                gamma = 0.95, epsilon = 0.2,
+                lam = 0.94, lr = 1e-3,
+                step_reward = 1e-3, line_clear_reward = 50,
+                height_place_reward = 0.1, height_penalty = 0.2,
+                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500):
         # learning params
         self.episodes_per_batch = episodes_per_batch
         self.max_timesteps_per_episode = max_timesteps_per_episode
@@ -14,7 +22,15 @@ class Config():
         self.lam = lam
         self.lr = lr
 
-        self.current_commit = "a57665626ba57f127bee842e3221b549cb823f82"
+        # self.current_commit = "a57665626ba57f127bee842e3221b549cb823f82"
+
+        self.line_clear_reward = line_clear_reward
+        self.height_place_reward = height_place_reward
+        self.height_penalty = height_penalty
+        self.bumpiness_penalty = bumpiness_penalty
+        self.hole_penalty = hole_penalty
+        self.game_over_penalty = game_over_penalty
+        self.step_reward = step_reward
 
 
     def to_dict(self):
@@ -29,6 +45,13 @@ class Config():
             "epsilon": self.epsilon,
             "lam": self.lam,
             "lr": self.lr,
-            "current_commit": self.current_commit,
+            # "current_commit": self.current_commit,
+            "line_clear_reward": self.line_clear_reward,
+            "height_place_reward": self.height_place_reward,
+            "height_penalty": self.height_penalty,
+            "bumpiness_penalty": self.bumpiness_penalty,
+            "hole_penalty": self.hole_penalty,
+            "step_reward": self.step_reward,
+            "game_over_penalty": self.game_over_penalty,
         }
         return dictionary
