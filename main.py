@@ -10,12 +10,12 @@ device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 if __name__ == '__main__':
     # play_pygame("ppo_conv_model_exp_1.pth", device)
     wandb.login()
-    config = Config(episodes_per_batch=128, updates_per_iteration=3,
-                    num_mini_batch_updates=32, num_sub_mini_batches=8,
-                    overall_timesteps=100000, lr=0.01,
+    config = Config(episodes_per_batch=50, updates_per_iteration=3,
+                    num_mini_batch_updates=5, num_sub_mini_batches=1,
+                    max_timesteps_per_episode=200, overall_timesteps=20000, lr=0.01,
                     game_over_penalty=2000)
-    ppo = PPO(device, config, experiment=1)
-    ppo.train(100000)
+    ppo = PPO(device, config, experiment=4)
+    ppo.train(config.overall_timesteps)
 
     ppo.close()
     # try:
