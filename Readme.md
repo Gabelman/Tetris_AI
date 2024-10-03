@@ -10,4 +10,5 @@ torch
 numpy
 tqdm
 wandb
+pygame
 ```
