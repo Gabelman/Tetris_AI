@@ -111,8 +111,8 @@ class PPO():
                         # torch.where: takes a conditional as first param, then the result for true, false. 
                         # clip = torch.where(mini_A_k >= 0, torch.min(prob_ratio, torch.tensor(1 + self.epsilon, dtype=prob_ratio.dtype, device=self.device)), torch.max(prob_ratio, torch.tensor(1 - self.epsilon, dtype=prob_ratio.dtype, device=self.device)))
                         clip = torch.clamp(prob_ratio, 1 - self.epsilon, 1 + self.epsilon)
-                        surrogate1 = A_k * prob_ratio
-                        surrogate2 = A_k * clip
+                        surrogate1 = mini_A_k * prob_ratio
+                        surrogate2 = mini_A_k * clip
 
                         # Calculate Losses
                         # actor_loss = (-clip * mini_A_k).mean() # negative, such that advantage is maximized
@@ -121,7 +121,7 @@ class PPO():
 
                         loss = actor_loss  + value_loss # maximize actor_loss and minimize value_loss
 
-                        loss /= self.update_size
+                        loss /= self.num_mini_batch_updates
                         acc_loss += loss
 
 
