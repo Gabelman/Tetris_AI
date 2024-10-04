@@ -61,7 +61,7 @@ class PPO():
                 V, _ = self.evaluate(batch_obs, batch_actions)
 
                 # Calculate advantage
-                A_k = self._calc_advantages(batch_rews, V.detach(), batch_lengths)
+                A_k = self._calc_advantages(batch_rews, V, batch_lengths)
 
                 # Normalize advantage
                 A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
@@ -77,7 +77,7 @@ class PPO():
             print(f"episodic return: {episodic_return}")
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
             for _ in tqdm(range(self.updates_per_iteration)):
-                update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size))
+                update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size), replace = False)
                 acc_loss = 0
                 # acc_act_loss = 0
                 for update_idcs in update_batch_idcs:
@@ -87,37 +87,41 @@ class PPO():
                         end = start + self.mini_batch_size
                         idcs = update_idcs[start:end]
 
-                        mini_obs = batch_obs[idcs]
-                        mini_actions = batch_actions[idcs]
-                        mini_log_probs = batch_log_probs[idcs]
-                        mini_rtgs = batch_rtgs[idcs]
-                        mini_done_mask = batch_done_mask[idcs]
-                        mini_A_k = A_k[idcs]
+                        update_obs = batch_obs[idcs]
+                        update_actions = batch_actions[idcs]
+                        update_log_probs_k = batch_log_probs[idcs]
+                        update_rtgs = batch_rtgs[idcs]
+                        update_done_mask = batch_done_mask[idcs]
+                        update_A_k = A_k[idcs]
 
                         # with autocast(device_type='cuda', dtype=torch.float16):
-                        V, log_probs = self.evaluate(mini_obs, mini_actions)
+                        V, log_probs = self.evaluate(update_obs, update_actions)
 
-                        V = V[mini_done_mask]
-                        log_probs = log_probs[mini_done_mask]
-                        mini_log_probs = mini_log_probs[mini_done_mask]
-                        mini_A_k = mini_A_k[mini_done_mask]
+                        V = V[update_done_mask]
+                        mini_log_probs = log_probs[update_done_mask]
+                        mini_log_probs_k = update_log_probs_k[update_done_mask]
+                        mini_A_k = update_A_k[update_done_mask]
 
 
                         # Calculate loss for actor model
                         # \phi_{\theta}(a, s) / \phi_{\theta_{k}}(a, s)
-                        prob_ratio = torch.exp(log_probs - mini_log_probs)
+                        prob_ratio = torch.exp(mini_log_probs - mini_log_probs_k)
                         
                         # surrogate objective see https://spinningup.openai.com/en/latest/algorithms/ppo.html
                         # torch.where: takes a conditional as first param, then the result for true, false. 
-                        clip = torch.where(mini_A_k >= 0, torch.min(prob_ratio, torch.tensor(1 + self.epsilon, dtype=prob_ratio.dtype, device=self.device)), torch.max(prob_ratio, torch.tensor(1 - self.epsilon, dtype=prob_ratio.dtype, device=self.device)))
+                        # clip = torch.where(mini_A_k >= 0, torch.min(prob_ratio, torch.tensor(1 + self.epsilon, dtype=prob_ratio.dtype, device=self.device)), torch.max(prob_ratio, torch.tensor(1 - self.epsilon, dtype=prob_ratio.dtype, device=self.device)))
+                        clip = torch.clamp(prob_ratio, 1 - self.epsilon, 1 + self.epsilon)
+                        surrogate1 = A_k * prob_ratio
+                        surrogate2 = A_k * clip
 
                         # Calculate Losses
-                        actor_loss = (-clip * mini_A_k).mean() # negative, such that advantage is maximized
-                        value_loss = nn.MSELoss()(mini_rtgs[mini_done_mask], V)
+                        # actor_loss = (-clip * mini_A_k).mean() # negative, such that advantage is maximized
+                        actor_loss = -torch.min(surrogate1, surrogate2).mean()
+                        value_loss = nn.MSELoss()(update_rtgs[update_done_mask], V)
 
                         loss = actor_loss  + value_loss # maximize actor_loss and minimize value_loss
 
-                        loss /= sum(mini_done_mask)
+                        loss /= self.update_size
                         acc_loss += loss
 
 
