@@ -10,6 +10,8 @@ from environments.environment import Env
 from models.TetrisConvModel import TetrisAgent
 from models.tetris_discrete_model import TetrisAI
 from config import Config
+from generator import Generator
+from functools import partial
 
 class Actions(Enum):
     NoAction = 0
@@ -453,38 +455,72 @@ class PygameTetris(Env):
 # rotation only works in one direction
 # No illegal move for rotation
 # No penalty for illegal moves
+def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1): # currently only works for conv2d model
+    factory = partial(PygameTetris.get_environment, render = True)
 
-def play_pygame(model_file, device, speed=1, scale=1): # currently only works for conv2d model
-    game = PygameTetris(0, discrete_obs=False, render=True, scale=scale)
-    FPS = 64
+    environment_seeds = [np.random.randint(0, 2**31) for _ in range(games)]
+    environments: list[PygameTetris] = [factory(seed) for seed in environment_seeds]
+    observations = [env.reset() for env in environments]
 
-    observation_space = game.observation_space
-    action_space = game.action_space
+    FPS = 2
 
-    human_player = False
-    if model_file:
+    observation_space = environments[0].observation_space
+    action_space = environments[0].action_space
 
-        model = TetrisAgent(*observation_space, action_space, device)
-        # model = TetrisAI()
-        model.to(device)
-        try:
-            model.load_state_dict(torch.load("exports/" + model_file, map_location=device))
-            print("Loaded existing model to play.")
-        except FileNotFoundError:
-            print(f"Invalid path to model file: {model_file}.")
-            return
-    else:
-        human_player = True
-
-
+    model = TetrisAgent(*observation_space, action_space, device)
+    # model = TetrisAI()
+    model.to(device)
+    try:
+        model.load_state_dict(torch.load("exports/" + model_file, map_location=device))
+        print("Loaded existing model to play.")
+    except FileNotFoundError:
+        print(f"Invalid path to model file: {model_file}.")
+        return
+    
     clock = pygame.time.Clock()
 
-    obs = game.reset()
 
     game_over = False
     running = True
-    if not human_player:
-        FPS = 2
+    env_idx = 0
+
+    print(f"starting game: ------------{env_idx + 1}------------")
+    clock.tick(FPS)
+    while running:
+        game: PygameTetris = environments[env_idx]
+        for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    running = False
+                    break
+        pis = model.get_pis(observations[env_idx])
+        if prob_actions:
+            action, _ = Generator.sample_action(pis)
+        else:
+            action = torch.argmax(pis).item()
+        print(f"action: {action}")
+        # observations[env_idx] = game.step(action) # TODO: Implement toggle for train/play in step
+
+        observations[env_idx], _, game_over = game.step(action)
+        game.render_screen()
+
+        if game_over:
+            env_idx += 1
+            if env_idx >= games:
+                running = False 
+            print(f"starting game: ------------{env_idx + 1}------------")
+
+        clock.tick(FPS)
+
+
+def play_pygame(speed=1, scale=1): 
+    game = PygameTetris(0, discrete_obs=False, render=True, scale=scale)
+    FPS = 64
+
+    clock = pygame.time.Clock()
+
+    game_over = False
+    running = True
     
     clock.tick(FPS)
     frame_count = 0
@@ -492,48 +528,31 @@ def play_pygame(model_file, device, speed=1, scale=1): # currently only works fo
     while running:
         frame_count += 1
         action = Actions.NoAction
-        if human_player:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    running = False
-                    break
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_LEFT:
-                        action = Actions.MoveLeft
-                    elif event.key == pygame.K_RIGHT:
-                        action = Actions.MoveRight
-                    elif event.key == pygame.K_e:
-                        action = Actions.RotateClock
-                    elif event.key == pygame.K_q:
-                        action = Actions.RotateCClock
-                    elif event.key == pygame.K_DOWN:
-                        action = Actions.MoveDown
-                    game.apply_action(action)
-                    game.render_screen()
-        else:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    running = False
-                    break
-            pis = model.get_pis(obs) # TODO: must be correctly sampled
-            action = torch.argmax(pis).item()
-            print(f"action: {action}")
-            # obs = game.step(action) # TODO: Implement toggle for train/play in step
-            # game.render_screen()
-        if human_player:
-            if frame_count % (FPS // speed) == 0:
-                obs, reward, game_over = game.step(action)
-                # print("obs: ")
-                # print(obs)
-                # print(f"reward: {reward}")
-        else:
-            obs, reward, game_over = game.step(action)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                running = False
+                break
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    action = Actions.MoveLeft
+                elif event.key == pygame.K_RIGHT:
+                    action = Actions.MoveRight
+                elif event.key == pygame.K_e:
+                    action = Actions.RotateClock
+                elif event.key == pygame.K_q:
+                    action = Actions.RotateCClock
+                elif event.key == pygame.K_DOWN:
+                    action = Actions.MoveDown
+                game.apply_action(action)
+                game.render_screen()
+        if frame_count % (FPS // speed) == 0:
+            _, _, game_over = game.step(action)
+            
         if game_over:
             running = False
 
 
-        clock.tick(FPS)  # Slower speed to observe AI's moves
+        clock.tick(FPS)
 
     pygame.quit()
