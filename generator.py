@@ -4,6 +4,7 @@ import gymnasium as gym
 
 from torch.distributions import Categorical
 import numpy as np
+import wandb
 
 from enum import Enum
 
@@ -41,18 +42,17 @@ class Generator():
         self.gamma = gamma # reward calculation
 
 
-        self.step_reward = 1e-1
-
     def sample(self, model: TetrisAgent):
         batch_obs = torch.full((self.num_environments * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
         batch_log_probs = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
-        batch_actions = torch.full((self.num_environments * self.max_timesteps_per_episode,), -1, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space)
+        batch_actions = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space). 0 action is doing nothing
         batch_rewards = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num episodes, episode_length)
         # batch_values = torch.full(self.num_environments, self.max_timesteps_per_episode, 0, dtype=torch.float)
         batch_rewards_to_go = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_done_mask = torch.full((self.num_environments * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
         batch_episode_lengths = []
 
+        game_done_lengths = []
         # print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
         for i in tqdm(range(self.num_environments)):
             current_env: Env = self.environments[i]
@@ -80,14 +80,16 @@ class Generator():
                     obs, reward, done = current_env.step(action)
                     self.environments_done[i] = done
 
-                    batch_rewards[idx] = reward + self.step_reward
+                    batch_rewards[idx] = reward
 
                 self.last_observations[i] = obs
                 if self.environments_done[i]:
+                    game_done_lengths.append(self.environments[i].get_game_length)
                     iterator.close()
                     break
             batch_episode_lengths.append(t_ep + 1)
 
+        wandb.log({"average_game_lengths": sum(game_done_lengths)/len(game_done_lengths)})
 
         batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
         # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)

@@ -7,7 +7,7 @@ class Config():
                 lam = 0.94, lr = 1e-3,
                 step_reward = 1e-3, line_clear_reward = 50,
                 height_place_reward = 0.1, height_penalty = 0.2,
-                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500):
+                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = ""):
         # learning params
         self.episodes_per_batch = episodes_per_batch
         self.max_timesteps_per_episode = max_timesteps_per_episode
@@ -31,6 +31,7 @@ class Config():
         self.hole_penalty = hole_penalty
         self.game_over_penalty = game_over_penalty
         self.step_reward = step_reward
+        self.info = info
 
 
     def to_dict(self):
@@ -53,5 +54,6 @@ class Config():
             "hole_penalty": self.hole_penalty,
             "step_reward": self.step_reward,
             "game_over_penalty": self.game_over_penalty,
+            "info": self.info,
         }
         return dictionary
