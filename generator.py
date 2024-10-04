@@ -1,5 +1,5 @@
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import gymnasium as gym
 
 from torch.distributions import Categorical
@@ -62,8 +62,8 @@ class Generator():
             else:
                 obs = self.last_observations[i]
 
-            iterator = tqdm(range(self.max_timesteps_per_episode))
-            for t_ep in iterator:
+            # iterator = tqdm(range(self.max_timesteps_per_episode))
+            for t_ep in tqdm(range(self.max_timesteps_per_episode), leave=False):
                 idx = get_batch_idx(self.max_timesteps_per_episode, i, t_ep) # In order to insert values into "flattened" tensors immediately
                 with torch.no_grad():
                     batch_done_mask[idx] = True
@@ -85,11 +85,12 @@ class Generator():
                 self.last_observations[i] = obs
                 if self.environments_done[i]:
                     game_done_lengths.append(self.environments[i].get_game_length)
-                    iterator.close()
+                    # iterator.close()
                     break
             batch_episode_lengths.append(t_ep + 1)
 
-        wandb.log({"average_game_lengths": sum(game_done_lengths)/len(game_done_lengths)})
+        if len(game_done_lengths) > 0:
+            wandb.log({"average_game_lengths": sum(game_done_lengths)/len(game_done_lengths)})
 
         batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
         # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)
@@ -120,6 +121,7 @@ class Generator():
     @staticmethod
     def sample_action(logits):
         pi = Categorical(logits=logits)
+        # print(f"cat logits: {pi.logits}")
         a = pi.sample()
         log_prob = pi.logits.squeeze()[a]
         return a.item(), log_prob.item()

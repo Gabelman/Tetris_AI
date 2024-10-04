@@ -5,7 +5,7 @@ from torch.amp import GradScaler, autocast
 from torch.distributions import Categorical
 import numpy as np
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import wandb
 
 from generator import Generator
