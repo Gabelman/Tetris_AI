@@ -52,13 +52,14 @@ class PPO():
         while current_timesteps < total_timesteps:
             self.iteration += 1
             batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.generator.sample(self.tetris_model)
-
+            # Using batch_log_probs here causes some discrepancy between ratios: batch_log_probs was calculated using single observations. with Bathc_normalization on, this yields significantly different results to passing the hole batch in the model at once.
+            self.tetris_model.train()
             step_sum = sum(batch_lengths)
             current_timesteps += step_sum
 
             with torch.no_grad():
                 # Calculate V_{\phi,    k}(a, s)
-                V, _ = self.evaluate(batch_obs, batch_actions)
+                V, log_probs_k = self.evaluate(batch_obs, batch_actions)
 
                 # Calculate advantage
                 A_k = self._calc_advantages(batch_rews, V, batch_lengths)
@@ -76,6 +77,8 @@ class PPO():
             # std_lengths = np.std(batch_lengths)
             print(f"episodic return: {episodic_return}")
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
+
+            self.tetris_model.train()
             for _ in tqdm(range(self.updates_per_iteration)):
                 update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size), replace = False)
                 acc_loss = 0
@@ -89,7 +92,7 @@ class PPO():
 
                         update_obs = batch_obs[idcs]
                         update_actions = batch_actions[idcs]
-                        update_log_probs_k = batch_log_probs[idcs]
+                        update_log_probs_k = log_probs_k[idcs]
                         update_rtgs = batch_rtgs[idcs]
                         update_done_mask = batch_done_mask[idcs]
                         update_A_k = A_k[idcs]

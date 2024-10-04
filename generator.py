@@ -53,6 +53,9 @@ class Generator():
         batch_episode_lengths = []
 
         game_done_lengths = []
+        
+        model.eval()
+
         # print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
         for i in tqdm(range(self.num_environments)):
             current_env: Env = self.environments[i]
@@ -123,7 +126,7 @@ class Generator():
         pi = Categorical(logits=logits)
         # print(f"cat logits: {pi.logits}")
         a = pi.sample()
-        log_prob = pi.logits.squeeze()[a]
+        log_prob = pi.log_prob(a)
         return a.item(), log_prob.item()
 
     def close(self):
