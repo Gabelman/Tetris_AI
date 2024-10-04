@@ -21,6 +21,7 @@ export_path = "exports/ppo_conv_model_exp_"
 
 class PPO():
     def __init__(self, device, config: Config, experiment:int, load_model_from_experiment=-1) -> None:
+        self.device = device
         self.init_hyperparameters(config)
         self.config=config
 
@@ -42,7 +43,7 @@ class PPO():
         self.batch_size = self.episodes_per_batch * self.max_timesteps_per_episode
         self.update_size = self.batch_size // self.num_mini_batch_updates
         self.mini_batch_size = self.update_size // self.num_sub_mini_batches
-        self.device = device
+        
         wandb.init(project="TetrisRenforcementLearning", name=f"pygame and ppo {self.experiment}", config=config.to_dict())
         
     def train(self, total_timesteps):
@@ -116,15 +117,15 @@ class PPO():
 
                         loss = actor_loss  + value_loss # maximize actor_loss and minimize value_loss
 
-                        loss /= self.num_sub_mini_batches
+                        loss /= sum(mini_done_mask)
                         acc_loss += loss
 
 
-                        self.scaler.scale(loss).backward(retain_graph=False)
+                        self.scaler.scale(loss).backward()
                     
                     wandb.log({"loss_per_iteration": acc_loss})
-                    # self.scaler.unscale_(self.optim)
-                    # torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
+                    self.scaler.unscale_(self.optim)
+                    torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
                     
                     self.scaler.step(self.optim)
                     self.scaler.update()
