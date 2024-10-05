@@ -20,9 +20,19 @@ export_path = "exports/"
 
 class DQNAgent:
     def __init__(self):
-        self.model = TetrisAI()
-        self.target_model = TetrisAI()
+        self.environment = PygameTetris(seed=0)
+        self.input_size = self.environment.observation_space  # new
+        self.action_space = self.environment.action_space  # new
+        self.model = TetrisAI(self.input_size, self.action_space)
+        self.target_model = TetrisAI(self.input_size, self.action_space)
         self.target_model.load_state_dict(self.model.state_dict())
+
+        # new: check for gpu and set device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # new: move models to the specified device
+        self.model.to(self.device)
+        self.target_model.to(self.device)
 
         # torch stuff
         self.optimizer = optim.Adam(self.model.parameters())
@@ -39,8 +49,7 @@ class DQNAgent:
         # environments
         # environment_factory = partial(PygameTetris.get_environment, discrete_obs=True)
         # self.generator = Generator(num_environments=1, max_timesteps_per_episode=100, environment_factory=environment_factory)
-        seed = 0
-        self.environment = PygameTetris(seed)
+        # seed = 0
 
     def train(self, continue_training=False):
         
@@ -66,6 +75,7 @@ class DQNAgent:
 
                 action = self.sample_action(obs)
                 next_obs, reward, terminated = self.environment.step(action)
+                total_reward += reward
                 
                 self.remember(obs, action, reward, next_obs, terminated)
                 self.replay()
@@ -88,6 +98,15 @@ class DQNAgent:
         self.save_memory()
 
     def sample_action(self, obs):
+        # new: convert obs to torch from numpy
+        obs = torch.tensor(obs, dtype=torch.float32).to(self.device)
+        #if torch.rand(1).item() < self.epsilon:
+        #    return torch.tensor(self.environment.sample_action()) 
+        #else:
+        #    q_values = self.model(obs)
+        #    return torch.argmax(q_values).item()
+
+    
         if random.random() <= self.epsilon:
             return random.randint(0, 3)
         with torch.no_grad():
@@ -102,14 +121,17 @@ class DQNAgent:
             return
 
         batch = random.sample(self.memory, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
 
+        states, actions, rewards, next_states, dones = zip(*batch)
+        states = [torch.as_tensor(state) for state in states]  # new
+        next_states = [torch.as_tensor(next_state) for next_state in next_states]  # new
         states = torch.stack(states)
         next_states = torch.stack(next_states)
         actions = torch.LongTensor(actions)
         rewards = torch.FloatTensor(rewards)
         dones = torch.FloatTensor(dones)
-
+        states = states.float()  # new: s.t. input and weights are same dtype (float)
+        next_states = next_states.float()  # new
         current_q = self.model(states).gather(1, actions.unsqueeze(1))
         next_q = self.target_model(next_states).max(1)[0].detach()
         target_q = rewards + (1 - dones) * self.gamma * next_q
