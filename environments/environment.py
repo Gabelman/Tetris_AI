@@ -1,12 +1,22 @@
 from abc import ABC, abstractmethod
+from numpy import ndarray
+
+from typing import SupportsFloat
 
 class Env(ABC):
     def __init__(self):
         pass
 
     @abstractmethod
-    def step(self, action):
-        """Does the next step in the environment."""
+    def step(self, action) -> tuple[ndarray, SupportsFloat, bool, dict[str, object]]:
+        """
+        Does the next step in the environment.
+        Returns:
+            obs(ndarray): The observation after taking the step in the environment.
+            reward(SupportsFloat): Reward given for the action.
+            terminated(bool): True if the environment has terminated. For now this only happens at a game-over state.
+            info(dict[str, object]): Information on the step taken.
+        """
 
     @abstractmethod
     def close(self):
