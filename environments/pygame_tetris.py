@@ -1,3 +1,4 @@
+from typing import SupportsFloat
 import pygame
 import random
 import numpy as np
@@ -130,13 +131,20 @@ class PygameTetris(Env):
 
         self.step_count = 0
 
-    
-    def step(self, action: Actions):
+    def step(self, action: Actions) -> tuple[np.ndarray, SupportsFloat, bool, dict[str, object]]:
         if isinstance(action, int):
             action = Actions(action)
+
+        info = {
+                "tetromino_placed": False,
+                "lines_cleared": 0,
+                "current_height": 0,
+                "bumpiness": 0,
+                "holes": 0,
+                }
         # Return values
         obs = np.zeros(self.observation_space)
-        reward = 0
+        reward = self.step_reward
         terminated = False
         # truncated = False
 
@@ -153,6 +161,10 @@ class PygameTetris(Env):
             self.update_grid(self.static_grid, self.current_tetromino, None)
             lines_cleared = self.clear_lines()
             height_placed = self.current_tetromino.y
+
+            info["tetromino_placed"] = True
+            info["lines_cleared"] = lines_cleared
+            
             
             self.current_tetromino = self.next_tetromino
             self.next_tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
@@ -163,24 +175,27 @@ class PygameTetris(Env):
                 print("Game Over!")
                 terminated = True
                 reward -= self.game_over_penalty
-                return obs, reward, terminated
+                return obs, reward, terminated, info
             reward += self.calculate_placement_reward(lines_cleared, height_placed)
+            reward -= self._static_reward()
         else:
             tetromino_to_remove = copy.deepcopy(self.current_tetromino)
             self.current_tetromino.move_down()
             self.update_grid(self.grid, self.current_tetromino, tetromino_to_remove)
 
+        info["current_height"] = self.calculate_height()
+        info["bumpiness"] = self.calculate_bumpiness(self.static_grid)
+        info["holes"] = self.count_holes()
 
         
-        reward += self.step_reward
-        reward -= self._static_reward() # penalty
+        # reward -= self._static_reward() # penalty
         self.step_count += 1
 
 
         self.render_screen()
         obs = self._get_observation()
 
-        return obs, reward, terminated
+        return obs, reward, terminated, info
 
     def reset(self):
         self.step_count = 0
@@ -514,7 +529,7 @@ def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1)
         print(f"action: {action}")
         # observations[env_idx] = game.step(action) # TODO: Implement toggle for train/play in step
 
-        observations[env_idx], _, game_over = game.step(action)
+        observations[env_idx], _, game_over, _ = game.step(action)
         game.render_screen()
 
         if game_over:
@@ -560,7 +575,7 @@ def play_pygame(speed=1, scale=1):
                 game.apply_action(action)
                 game.render_screen()
         if frame_count % (FPS // speed) == 0:
-            _, _, game_over = game.step(action)
+            _, _, game_over, _ = game.step(action)
             
         if game_over:
             running = False

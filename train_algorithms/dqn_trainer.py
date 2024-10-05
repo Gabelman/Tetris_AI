@@ -65,7 +65,7 @@ class DQNAgent:
             while not game_over:
 
                 action = self.sample_action(obs)
-                next_obs, reward, terminated = self.environment.step(action)
+                next_obs, reward, terminated, _ = self.environment.step(action)
                 
                 self.remember(obs, action, reward, next_obs, terminated)
                 self.replay()

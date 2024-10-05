@@ -80,7 +80,7 @@ class Generator():
                     batch_actions[idx] = action
                     batch_log_probs[idx] = log_prob
 
-                    obs, reward, done = current_env.step(action)
+                    obs, reward, done, _ = current_env.step(action)
                     self.environments_done[i] = done
 
                     batch_rewards[idx] = reward
