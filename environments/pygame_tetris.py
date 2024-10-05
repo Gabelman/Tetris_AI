@@ -434,7 +434,7 @@ class PygameTetris(Env):
         if self.discrete_obs:
             grid_flattened_size = np.array(self.grid).flatten().shape
             tetromino_flattened_size = shape_to_numpy(self.next_tetromino.shape).flatten().shape
-            return (grid_flattened_size[0] + tetromino_flattened_size[0], )
+            return grid_flattened_size[0] + tetromino_flattened_size[0]
         else:
             obs_space = pygame.surfarray.array3d(self.screen).shape # (W, H, C)
             obs_space = (obs_space[2], obs_space[1], obs_space[0]) # (C, H, W) for conv2d layer
