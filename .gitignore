@@ -6,6 +6,7 @@
 /tetris_ai_model - Kopie.pth
 __pycache__/
 
+.idea/
 
 # evironment
 .venv/
