@@ -421,6 +421,20 @@ class PygameTetris(Env):
             # self.action_penalty = 3e-4
             self.step_reward = 1e-3
 
+    def close(self):
+        pygame.quit()
+
+    def __str__(self) -> str:
+        ret = ""
+        for row in self.grid:
+            for cell in row:
+                if cell:
+                    ret += "X"
+                else:
+                    ret += "O"
+            ret += "\n"
+        ret += f"next shape: {self.next_tetromino.shape}"
+        return ret
     @property
     def action_space(self):
         return len(Actions)
@@ -440,8 +454,7 @@ class PygameTetris(Env):
             obs_space = (obs_space[2], obs_space[1], obs_space[0]) # (C, H, W) for conv2d layer
             return obs_space
         
-    def close(self):
-        pygame.quit()
+
 
     @staticmethod
     def get_environment(seed=0, discrete_obs=False, render=False, scale=1, config: Config = None):
