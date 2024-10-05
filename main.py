@@ -16,13 +16,13 @@ if __name__ == '__main__':
     wandb.login()
     # wandb. init(mode="disabled")
     info = "Reward gives penalty for every step based on the static board state. Otherwise there is normal step reward and placement reward."
-    #config = Config(episodes_per_batch=10, updates_per_iteration=2,
-    #                num_mini_batch_updates=5, num_sub_mini_batches=1,
-    #                max_timesteps_per_episode=150, overall_timesteps=50000, lr=0.01,
-    #                game_over_penalty=2000, step_reward=0.1, height_place_reward=2, info=info)
+    config = Config(episodes_per_batch=10, updates_per_iteration=2,
+                   num_mini_batch_updates=5, num_sub_mini_batches=1,
+                   max_timesteps_per_episode=150, overall_timesteps=50000, lr=0.01,
+                   game_over_penalty=2000, step_reward=0.1, height_place_reward=2, info=info)
        
-    #ppo = PPO(device, config, experiment=13)
-    #ppo.train(config.overall_timesteps)
+    ppo = PPO(device, config, experiment=13)
+    ppo.train(config.overall_timesteps)
     
     dqn = DQNAgent()
     dqn.train()

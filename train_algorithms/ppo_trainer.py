@@ -44,7 +44,6 @@ class PPO():
         self.update_size = self.batch_size // self.num_mini_batch_updates
         self.mini_batch_size = self.update_size // self.num_sub_mini_batches
         
-        wandb.init(project="TetrisRenforcementLearning", name=f"pygame and ppo {self.experiment}", config=config.to_dict())
         
     def train(self, total_timesteps):
         current_timesteps = 0

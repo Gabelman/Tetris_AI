@@ -40,6 +40,11 @@ class GymnasiumTetris(Env):
             warnings.warn("Gymnasium environment was seeded, but seeds have no effect.")
         return GymnasiumTetris(discrete_obs=discrete_obs, render=render)
 
+    @property
+    def get_game_length(self) -> int:
+        raise NotImplementedError
+
+
 
 
 
