@@ -1,5 +1,5 @@
 import torch
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import gymnasium as gym
 
 from torch.distributions import Categorical
@@ -81,7 +81,7 @@ class Generator():
                 obs = self.last_observations[i]
 
             # iterator = tqdm(range(self.max_timesteps_per_episode))
-            for t_ep in tqdm(range(self.max_timesteps_per_episode), leave=False):
+            for t_ep in tqdm(range(self.max_timesteps_per_episode)):
                 idx = get_batch_idx(self.max_timesteps_per_episode, i, t_ep) # In order to insert values into "flattened" tensors immediately
                 with torch.no_grad():
                     batch_done_mask[idx] = True
