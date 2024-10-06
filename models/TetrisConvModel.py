@@ -33,8 +33,10 @@ class InitialImageEmbed(nn.Module):
         return x
 
 class TetrisAgent(nn.Module):
-    def __init__(self, C, H, W, output_dim, device):
+    def __init__(self, C, H, W, output_dim, device, init_uniform=True):
         super().__init__()
+        if init_uniform:
+            self.init_xavier(self)
         kernel_depth = 8  # 8 chosen arbitratily at this point
         kernel_depth2 = 4
         self.board_embed = InitialImageEmbed(kernel_depth, W, H, C)
@@ -75,4 +77,11 @@ class TetrisAgent(nn.Module):
         if len(obs.shape) == 3:
             return obs.unsqueeze(0)
         return obs
+    
+    @staticmethod
+    def init_xavier(m):
+        if isinstance(m, (nn.Linear, nn.Conv2d)):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias:
+                nn.init.zeros_(m.bias)
     
