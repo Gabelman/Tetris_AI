@@ -79,7 +79,9 @@ class PPO():
 
             self.tetris_model.train()
             for _ in tqdm(range(self.updates_per_iteration)):
-                update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size), replace = False)
+                np.random.shuffle(batch_idcs)
+                # update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size), replace = False)
+                update_batch_idcs = np.split(batch_idcs, self.num_mini_batch_updates)
                 acc_loss = 0
                 # acc_act_loss = 0
                 for update_idcs in update_batch_idcs:
