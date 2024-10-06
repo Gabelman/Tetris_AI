@@ -50,18 +50,18 @@ class PPO():
         self.iteration = 0
         while current_timesteps < total_timesteps:
             self.iteration += 1
-            batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_rews, batch_lengths, batch_done_mask = self.generator.sample(self.tetris_model)
+            sample = self.generator.sample(self.tetris_model)
             # Using batch_log_probs here causes some discrepancy between ratios: batch_log_probs was calculated using single observations. with Bathc_normalization on, this yields significantly different results to passing the hole batch in the model at once.
-            self.tetris_model.train()
-            step_sum = sum(batch_lengths)
+            # self.tetris_model.train()
+            step_sum = sum(sample["done_lengths"])
             current_timesteps += step_sum
 
             with torch.no_grad():
                 # Calculate V_{\phi,    k}(a, s)
-                V, log_probs_k = self.evaluate(batch_obs, batch_actions)
+                V, _ = self.evaluate(sample["observations"], sample["actions"])
 
                 # Calculate advantage
-                A_k = self._calc_advantages(batch_rews, V, batch_lengths)
+                A_k = self._calc_advantages(sample["rewards"], V, sample["episode_lengths"])
 
                 # Normalize advantage
                 A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
@@ -71,9 +71,9 @@ class PPO():
             batch_idcs = np.arange(self.batch_size)
 
             print(f"=============\Iteration: {self.iteration}\ncurrent time steps: {current_timesteps}\n=============\n")
-            episodic_return = torch.sum(batch_rews[batch_done_mask])
-            current_average_lengths = np.mean(batch_lengths)
-            # std_lengths = np.std(batch_lengths)
+            episodic_return = torch.sum(sample["rewards"][sample["done_mask"]])
+            current_average_lengths = np.mean(sample["episode_lengths"])
+
             print(f"episodic return: {episodic_return}")
             self._log_infos(sample["infos"])
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
@@ -94,11 +94,11 @@ class PPO():
                         end = start + self.mini_batch_size
                         idcs = update_idcs[start:end]
 
-                        update_obs = batch_obs[idcs]
-                        update_actions = batch_actions[idcs]
-                        update_log_probs_k = log_probs_k[idcs]
-                        update_rtgs = batch_rtgs[idcs]
-                        update_done_mask = batch_done_mask[idcs]
+                        update_obs = sample["observations"][idcs]
+                        update_actions = sample["actions"][idcs]
+                        update_log_probs_k = sample["log_probs"][idcs]
+                        update_rtgs = sample["rtgs"][idcs]
+                        update_done_mask = sample["done_mask"][idcs]
                         update_A_k = A_k[idcs]
 
                         # with autocast(device_type='cuda', dtype=torch.float16):

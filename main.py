@@ -12,6 +12,7 @@ from models.tetris_discrete_model import TetrisAI
 
 device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 if __name__ == '__main__':
+    experiment = 21
     # let_AI_play_pygame("ppo_conv_model_exp_-1.pth", device, prob_actions=True)
     wandb.login()
     # wandb. init(mode="disabled")
@@ -24,10 +25,10 @@ if __name__ == '__main__':
     #ppo = PPO(device, config, experiment=13)
     #ppo.train(config.overall_timesteps)
     
-    dqn = DQNAgent()
-    dqn.train()
+    # dqn = DQNAgent()
+    # dqn.train()
 
-    dqn.close()
+    # dqn.close()
     # try:
     #     choice = input("Enter 'train' to train the AI or 'play' to watch the AI play: ")
     #     if choice.lower() == 'train':

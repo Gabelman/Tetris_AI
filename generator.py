@@ -47,17 +47,29 @@ class Generator():
         self.iteration += 1
         batch_obs = torch.full((self.num_environments * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
         batch_log_probs = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
+        batch_values = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_actions = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space). 0 action is doing nothing
         batch_rewards = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num episodes, episode_length)
         # batch_values = torch.full(self.num_environments, self.max_timesteps_per_episode, 0, dtype=torch.float)
-        batch_rewards_to_go = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
+        # batch_rewards_to_go = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_done_mask = torch.full((self.num_environments * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
         batch_episode_lengths = []
 
         game_done_lengths = []
         infos = []
 
-        model.eval()
+        sample = {
+            "observations": batch_obs,
+            "log_probs": batch_log_probs,
+            "actions": batch_actions,
+            "rewards": batch_rewards,
+            # "rtgs": batch_rewards_to_go,
+            "values": batch_values,
+            "done_mask": batch_done_mask,
+            "episode_lengths": batch_episode_lengths,
+            "infos": infos, 
+            "done_lengths": game_done_lengths
+        }
 
         # print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
         for i in tqdm(range(self.num_environments)):
@@ -76,12 +88,13 @@ class Generator():
 
                     obs = self.obs_to_tensor(obs)
                     
-                    pi = model.get_pis(obs)
+                    pi, v = model(obs)
                     action, log_prob = self.sample_action(pi)
 
                     batch_obs[idx] = obs
                     batch_actions[idx] = action
                     batch_log_probs[idx] = log_prob
+                    batch_values[idx] = v
 
                     obs, reward, done, info = current_env.step(action)
                     infos.append(info)
@@ -111,9 +124,9 @@ class Generator():
 
         
 
-        batch_rewards_to_go = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
+        sample["rtgs"] = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
         # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)
-        return batch_obs, batch_actions, batch_log_probs, batch_rewards_to_go, batch_rewards, batch_episode_lengths, batch_done_mask
+        return sample
     
     
     def _calc_rewards_to_go(self, batch_rewards, episode_lengths):
