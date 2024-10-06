@@ -130,6 +130,7 @@ class PygameTetris(Env):
         self.render = render
 
         self.step_count = 0
+        info = {}
 
     def step(self, action: Actions) -> tuple[np.ndarray, SupportsFloat, bool, dict[str, object]]:
         if isinstance(action, int):
@@ -141,6 +142,13 @@ class PygameTetris(Env):
                 "current_height": 0,
                 "bumpiness": 0,
                 "holes": 0,
+                "step_reward": self.step_reward,
+                "height_place_reward": 0,
+                "line_clear_reward": 0,
+                "height_penalty": 0,
+                "bumpiness_penalty": 0,
+                "hole_penalty": 0,
+                "game_over_penalty": 0
                 }
         # Return values
         obs = np.zeros(self.observation_space)
@@ -175,9 +183,10 @@ class PygameTetris(Env):
                 print("Game Over!")
                 terminated = True
                 reward -= self.game_over_penalty
+                info["game_over_penalty"] = -self.game_over_penalty
                 return obs, reward, terminated, info
-            reward += self.calculate_placement_reward(lines_cleared, height_placed)
-            reward -= self._static_reward()
+            reward += self.calculate_placement_reward(lines_cleared, height_placed, info)
+            reward += self._static_reward(info)
         else:
             tetromino_to_remove = copy.deepcopy(self.current_tetromino)
             self.current_tetromino.move_down()
@@ -259,24 +268,31 @@ class PygameTetris(Env):
 
 
     # Reward stuff
-    def calculate_placement_reward(self, lines_cleared, height_placed):
-        reward = 0
-        reward += lines_cleared ** 2 * self.line_clear_reward
-        reward += (self.ROWS - height_placed) * self.height_place_reward
+    def calculate_placement_reward(self, lines_cleared, height_placed, info):
+        line_clear_reward = lines_cleared ** 2 * self.line_clear_reward
+        height_place_reward = (self.ROWS - height_placed) * self.height_place_reward
+        info["height_place_reward"] = height_place_reward
+        info["line_clear_reward"] = line_clear_reward
 
-        return reward
-    def _static_reward(self):
+        return height_place_reward + line_clear_reward
+    
+
+    def _static_reward(self, info):
         """Reward based on the current tetrominos on the grid. Return value is positive. As penalty it should be negated!"""
-        reward = self.count_holes() * self.hole_penalty
+        hole_penalty = self.count_holes() * self.hole_penalty
         # TODO: the issue here is that landing a tile incidentally gives negative reward. Maybe bumpiness and height need to be adjusted with a certain "gold standard".
-        reward += self.calculate_bumpiness(self.static_grid) * self.bumpiness_penalty
-        reward += self.calculate_height() * self.height_penalty
+        bumpiness_penalty = self.calculate_bumpiness(self.static_grid) * self.bumpiness_penalty
+        height_penalty = self.calculate_height() * self.height_penalty
         '''# Penalty for height differences
         for i in range(COLUMNS - 1):
             height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
             reward -= height_diff * 0.1
         '''
-        return reward
+
+        info["height_penalty"] = height_penalty
+        info["hole_penalty"] = hole_penalty
+        info["bumpiness_penalty"] = bumpiness_penalty
+        return -height_penalty - hole_penalty - bumpiness_penalty
 
     def clear_lines(self):
         """

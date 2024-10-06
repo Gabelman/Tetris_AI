@@ -75,6 +75,7 @@ class PPO():
             current_average_lengths = np.mean(batch_lengths)
             # std_lengths = np.std(batch_lengths)
             print(f"episodic return: {episodic_return}")
+            self._log_infos(sample["infos"])
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
 
             self.tetris_model.train()
@@ -83,6 +84,8 @@ class PPO():
                 # update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size), replace = False)
                 update_batch_idcs = np.split(batch_idcs, self.num_mini_batch_updates)
                 acc_loss = 0
+                acc_actor_loss = 0
+                acc_value_loss = 0
                 # acc_act_loss = 0
                 for update_idcs in update_batch_idcs:
                     self.optim.zero_grad()
@@ -127,11 +130,13 @@ class PPO():
 
                         loss /= self.num_mini_batch_updates
                         acc_loss += loss
+                        acc_actor_loss += actor_loss / self.num_mini_batch_updates
+                        acc_value_loss += value_loss / self.num_mini_batch_updates
 
 
                         self.scaler.scale(loss).backward()
                     
-                    wandb.log({"loss_per_iteration": acc_loss})
+                    wandb.log({"loss_per_iteration": acc_loss, "actor_loss_per_iteration": acc_actor_loss, "value_loss_per_iteration": acc_value_loss})
                     self.scaler.unscale_(self.optim)
                     torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
                     
@@ -208,6 +213,27 @@ class PPO():
         # self.actor_lr = actor_lr
         # self.critic_lr = cricit_lr
         self.lr = config.lr
+
+    @staticmethod
+    def _log_infos(infos):
+        step_rewards = [info["step_reward"] for info in infos]
+        height_place_rewards = [info["height_place_reward"] for info in infos]
+        line_clear_rewards = [info["line_clear_reward"] for info in infos]
+        height_penaltys = [info["height_penalty"] for info in infos]
+        bumpiness_penaltys = [info["bumpiness_penalty"] for info in infos]
+        hole_penaltys = [info["hole_penalty"] for info in infos]
+        game_over_penaltys = [info["game_over_penalty"] for info in infos]
+
+        wandb.log({
+            "step reward": sum(step_rewards),
+            "height place reward": sum(height_place_rewards),
+            "line clear reward": sum(line_clear_rewards),
+            "height penalty": sum(height_penaltys),
+            "bumpiness penalty": sum(bumpiness_penaltys),
+            "hole_penalty": sum(hole_penaltys),
+            "game over penalty": sum(game_over_penaltys)
+            })
+
 
     def close(self):
         self.generator.close()
