@@ -56,15 +56,15 @@ class PPO():
             step_sum = sum(sample["done_lengths"])
             current_timesteps += step_sum
 
-            with torch.no_grad():
-                # Calculate V_{\phi,    k}(a, s)
-                V, _ = self.evaluate(sample["observations"], sample["actions"])
+            # with torch.no_grad():
+            # Calculate V_{\phi,    k}(a, s)
+            # V, _ = self.evaluate(sample["observations"])
 
-                # Calculate advantage
-                A_k = self._calc_advantages(sample["rewards"], V, sample["episode_lengths"])
+            # Calculate advantage
+            A_k = self._calc_advantages(sample["rewards"], sample["values"], sample["episode_lengths"])
 
-                # Normalize advantage
-                A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
+            # Normalize advantage
+            A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
 
 
             # update_size = step_sum // self.num_mini_batch_updates # floor division
@@ -97,7 +97,7 @@ class PPO():
                         update_obs = sample["observations"][idcs]
                         update_actions = sample["actions"][idcs]
                         update_log_probs_k = sample["log_probs"][idcs]
-                        update_rtgs = sample["rtgs"][idcs]
+                        update_rtgs = sample["values"][idcs] + A_k[idcs] # As A(s, a) = Q(s, a) - V(s) and because rewards_to_go are an unbiased estimator of Q(s, a)
                         update_done_mask = sample["done_mask"][idcs]
                         update_A_k = A_k[idcs]
 
