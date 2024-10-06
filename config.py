@@ -5,6 +5,7 @@ class Config():
                 num_sub_mini_batches = 4, overall_timesteps = 10000,
                 gamma = 0.95, epsilon = 0.2,
                 lam = 0.94, lr = 1e-3,
+                entropy_coef=0.01,
                 step_reward = 1e-3, line_clear_reward = 50,
                 height_place_reward = 0.1, height_penalty = 0.2,
                 bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = ""):
@@ -20,6 +21,7 @@ class Config():
         self.gamma = gamma
         self.epsilon = epsilon
         self.lam = lam
+        self.entropy_coef = entropy_coef
         self.lr = lr
 
         # self.current_commit = "a57665626ba57f127bee842e3221b549cb823f82"
@@ -45,6 +47,7 @@ class Config():
             "gamma": self.gamma,
             "epsilon": self.epsilon,
             "lam": self.lam,
+            "entropy_coef": self.entropy_coef,
             "lr": self.lr,
             # "current_commit": self.current_commit,
             "line_clear_reward": self.line_clear_reward,

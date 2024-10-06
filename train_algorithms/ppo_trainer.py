@@ -102,15 +102,23 @@ class PPO():
                         update_A_k = A_k[idcs]
 
                         # with autocast(device_type='cuda', dtype=torch.float16):
-                        V, log_probs = self.evaluate(update_obs, update_actions)
+                        V, pi = self.evaluate(update_obs)
+                        log_probs = pi.log_prob(update_actions)
 
                         V = V[update_done_mask]
                         mini_log_probs = log_probs[update_done_mask]
                         mini_log_probs_k = update_log_probs_k[update_done_mask]
                         mini_A_k = update_A_k[update_done_mask]
 
+                        # ---Entropy bonus
+                        entropy = pi.entropy()
+                        entropy[update_done_mask] = 0
+                        entropy_bonus = entropy.mean()
 
-                        # Calculate loss for actor model
+
+
+                        # ---Calculate loss for actor model
+
                         # \phi_{\theta}(a, s) / \phi_{\theta_{k}}(a, s)
                         prob_ratio = torch.exp(mini_log_probs - mini_log_probs_k)
                         
@@ -121,12 +129,12 @@ class PPO():
                         surrogate1 = mini_A_k * prob_ratio
                         surrogate2 = mini_A_k * clip
 
-                        # Calculate Losses
+                        # ---Calculate Losses
                         # actor_loss = (-clip * mini_A_k).mean() # negative, such that advantage is maximized
                         actor_loss = -torch.min(surrogate1, surrogate2).mean()
                         value_loss = nn.MSELoss()(update_rtgs[update_done_mask], V)
 
-                        loss = actor_loss  + value_loss # maximize actor_loss and minimize value_loss
+                        loss = actor_loss  + value_loss - entropy_bonus * self.entropy_coef # maximize actor_loss and minimize value_loss
 
                         loss /= self.num_mini_batch_updates
                         acc_loss += loss
@@ -173,13 +181,13 @@ class PPO():
         return advantages
     
 
-    def evaluate(self, batch_obs, batch_acts):
+    def evaluate(self, batch_obs):
         pi, v = self.tetris_model(batch_obs)
         pi = Categorical(logits=pi)
         v = v.squeeze()
         # V = self.critic(batch_obs).squeeze()
         # log_probs = self.actor(batch_obs)
-        pi = pi.log_prob(batch_acts)
+        # pi = pi.log_prob(batch_acts)
         # pi = pi[torch.arange(pi.size(0)), batch_acts] # select only probs of actions taken. torch.arange(...) selects all rows, batch_acts selects the appropriate actions for each row (timestep over different episodes).
         return v, pi
 
@@ -209,6 +217,7 @@ class PPO():
         self.gamma = config.gamma # Used in rewards to go
         self.epsilon = config.epsilon # PPO clipping objective
         self.lam = config.lam# value is following https://arxiv.org/abs/1506.0243
+        self.entropy_coef = config.entropy_coef
 
         # self.actor_lr = actor_lr
         # self.critic_lr = cricit_lr
