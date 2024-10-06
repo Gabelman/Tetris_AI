@@ -124,6 +124,7 @@ class Generator():
             for t_ep in reversed(range(episode_lengths[ep_idx])): # Go back in time: approximation for Q(a, s), through Bellman equation, which is r(a, s) + \gamma Q(a', s')
                 current_idx = get_batch_idx(self.max_timesteps_per_episode, ep_idx, t_ep)
                 rtg = batch_rewards[current_idx] + self.gamma * current_rtg
+                current_rtg = rtg
                 batch_rtgs[current_idx] = rtg
 
         return batch_rtgs
