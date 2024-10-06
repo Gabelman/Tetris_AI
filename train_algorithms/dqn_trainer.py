@@ -6,6 +6,7 @@ import torch.optim as optim
 import numpy as np
 from collections import deque
 import pickle
+import wandb
 
 from environments.pygame_tetris import PygameTetris, play_pygame
 from models.tetris_discrete_model import TetrisAI
@@ -33,6 +34,17 @@ class DQNAgent:
         # new: move models to the specified device
         self.model.to(self.device)
         self.target_model.to(self.device)
+
+        # wandb initialization
+        wandb.init(project="Tetris_AI", name="Tetris_DQN", config={
+            "batch_size": 32,
+            "gamma": 0.99,
+            "epsilon_decay": 0.995,
+            "learning_rate": 0.001,
+            "num_episodes": 1000,})
+        self.model = TetrisAI(self.input_size, self.action_space)
+        self.target_model = TetrisAI(self.input_size, self.action_space)
+        self.target_model.load_state_dict(self.model.state_dict())
 
         # torch stuff
         self.optimizer = optim.Adam(self.model.parameters())
@@ -68,19 +80,20 @@ class DQNAgent:
         for episode in range(num_episodes):
             game_over = False
             total_reward = 0
+            steps = 0
             
             obs = self.environment.reset()
 
             while not game_over:
-
+                steps += 1
                 action = self.sample_action(obs)
                 next_obs, reward, terminated, _ = self.environment.step(action)
-                total_reward += reward
                 
                 self.remember(obs, action, reward, next_obs, terminated)
                 self.replay()
                 obs = next_obs
 
+                total_reward += reward
                 game_over = terminated
 
             if episode % update_target_every == 0:
@@ -92,6 +105,15 @@ class DQNAgent:
                 # TODO: reimplement getting information from the environment. See: lines_cleared
                 # print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Lines Cleared: {lines_cleared}, Epsilon: {agent.epsilon:.2f}")
                 print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Epsilon: {self.epsilon:.2f}")
+
+            wandb.log({
+                "episode": episode,
+                "total_reward": total_reward,
+                "epsilon": self.epsilon,
+                "game_time": steps,  # Game time based on steps
+            })
+
+            print(f"Episode: {episode}, Total Reward: {round(total_reward)}, Game Time: {steps}, Epsilon: {self.epsilon:.2f}")
 
         # Final save
         torch.save(self.model.state_dict(), export_path + "tetris_ai_model.pth")
