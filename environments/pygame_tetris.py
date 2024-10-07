@@ -414,6 +414,7 @@ class PygameTetris(Env):
         else:
             obs = pygame.surfarray.array3d(self.screen)
             obs = self.reshape_obs(obs)
+            obs = obs.astype(np.float32) / 255.0
         return obs
     
     def _reset_screen(self):

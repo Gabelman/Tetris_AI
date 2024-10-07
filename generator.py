@@ -45,7 +45,7 @@ class Generator():
 
     def sample(self, model: TetrisAgent):
         self.iteration += 1
-        batch_obs = torch.full((self.num_environments * self.max_timesteps_per_episode, *self.observation_space), -1, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
+        batch_obs = torch.full((self.num_environments * self.max_timesteps_per_episode, *self.observation_space), 0, dtype=torch.float, device=self.device, requires_grad=False) # Batch Observations. (num_episodes * episode_length, observation_shape)
         batch_log_probs = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_values = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_actions = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.int, device=self.device, requires_grad=False) # (num_episodes * episode_length, action_space). 0 action is doing nothing
