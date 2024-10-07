@@ -5,7 +5,8 @@ class Config():
                 num_sub_mini_batches = 4, overall_timesteps = 10000,
                 gamma = 0.95, epsilon = 0.2,
                 lam = 0.94, lr = 1e-3,
-                entropy_coef=0.01,
+                anneal_factory = 1, min_lr = 1e-7,
+                entropy_coef=0.01, vf_weight=0.1,
                 step_reward = 1e-3, line_clear_reward = 50,
                 line_density_reward = 0.8,
                 height_place_reward = 0.1, height_penalty = 0.2,
@@ -23,7 +24,10 @@ class Config():
         self.epsilon = epsilon
         self.lam = lam
         self.entropy_coef = entropy_coef
+        self.vf_weigth = vf_weight
         self.lr = lr
+        self.min_lr = min_lr
+        self.anneal_factor = anneal_factory
 
         # self.current_commit = "a57665626ba57f127bee842e3221b549cb823f82"
 
@@ -51,6 +55,8 @@ class Config():
             "lam": self.lam,
             "entropy_coef": self.entropy_coef,
             "lr": self.lr,
+            "anneal_factor": self.anneal_factor,
+            "min_lr": self.min_lr,
             # "current_commit": self.current_commit,
             "line_clear_reward": self.line_clear_reward,
             "height_place_reward": self.height_place_reward,

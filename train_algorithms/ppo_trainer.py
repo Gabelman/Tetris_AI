@@ -39,6 +39,7 @@ class PPO():
         self.scaler = GradScaler(device)
 
         self.iteration = 0
+        self.save_model_every_n = 10
 
         self.batch_size = self.episodes_per_batch * self.max_timesteps_per_episode
         self.update_size = self.batch_size // self.num_mini_batch_updates
@@ -49,16 +50,23 @@ class PPO():
         current_timesteps = 0
         self.iteration = 0
         while current_timesteps < total_timesteps:
+            # ---- Learning rate annealing
+            anneal_coef = current_timesteps / total_timesteps * self.anneal_factor
+            new_lr = max(self.min_lr, (1 - anneal_coef) * self.lr)
+            self.optim.param_groups[0]["lr"] = new_lr
+
+            # Track
             self.iteration += 1
+            if self.iteration % self.save_model_every_n == 0:
+                self.save_model()
+
+            #---- Sample
             sample = self.generator.sample(self.tetris_model)
-            # Using batch_log_probs here causes some discrepancy between ratios: batch_log_probs was calculated using single observations. with Bathc_normalization on, this yields significantly different results to passing the hole batch in the model at once.
-            # self.tetris_model.train()
+            # Note: Using batch_log_probs here causes some discrepancy between ratios: batch_log_probs was calculated using single observations. with Bathc_normalization on, this yields significantly different results to passing the hole batch in the model at once.
+            
+            # Update steps
             step_sum = sum(sample["done_lengths"])
             current_timesteps += step_sum
-
-            # with torch.no_grad():
-            # Calculate V_{\phi,    k}(a, s)
-            # V, _ = self.evaluate(sample["observations"])
 
             # Calculate advantage
             A_k = self._calc_advantages(sample["rewards"], sample["values"], sample["episode_lengths"])
@@ -70,6 +78,7 @@ class PPO():
             # update_size = step_sum // self.num_mini_batch_updates # floor division
             batch_idcs = np.arange(self.batch_size)
 
+            # --- Logging
             print(f"=============\Iteration: {self.iteration}\ncurrent time steps: {current_timesteps}\n=============\n")
             episodic_return = torch.sum(sample["rewards"][sample["done_mask"]])
             current_average_lengths = np.mean(sample["episode_lengths"])
@@ -78,11 +87,13 @@ class PPO():
             self._log_infos(sample["infos"])
             wandb.log({"episodicReturn": episodic_return, "AverageEpisodeLengths": current_average_lengths})
 
-            self.tetris_model.train()
+            self.tetris_model.train() # fragment. Shouldn't be necessary. Sampling should not be done using eval, see Note above
             for _ in tqdm(range(self.updates_per_iteration)):
+                # --- Mini batches
                 np.random.shuffle(batch_idcs)
                 # update_batch_idcs = np.random.choice(batch_idcs, (self.num_mini_batch_updates, self.update_size), replace = False)
                 update_batch_idcs = np.split(batch_idcs, self.num_mini_batch_updates)
+
                 acc_loss = 0
                 acc_actor_loss = 0
                 acc_value_loss = 0
@@ -92,6 +103,7 @@ class PPO():
                     self.optim.zero_grad()
 
                     for start in range(0, self.update_size, self.mini_batch_size):
+                        # --- Sub batches. Tried to reduce memory usage.
                         end = start + self.mini_batch_size
                         idcs = update_idcs[start:end]
 
@@ -108,6 +120,7 @@ class PPO():
                         V, pi = self.evaluate(update_obs)
                         log_probs = pi.log_prob(update_actions)
 
+                        # --- Update data
                         V = V[update_done_mask]
                         masked_values = update_values[update_done_mask]
                         masked_rtgs = update_rtgs[update_done_mask]
@@ -122,8 +135,8 @@ class PPO():
 
 
 
-                        # ---Calculate loss for actor model
 
+                        # --- Calculate loss for actor model
                         # \phi_{\theta}(a, s) / \phi_{\theta_{k}}(a, s)
                         prob_ratio = torch.exp(masked_log_probs - masked_log_probs_k)
                         
@@ -134,8 +147,6 @@ class PPO():
                         surrogate1 = masked_A_k * prob_ratio
                         surrogate2 = masked_A_k * clip
 
-                        # ---Calculate Losses
-                        # actor_loss = (-clip * mini_A_k).mean() # negative, such that advantage is maximized
                         actor_loss = -torch.min(surrogate1, surrogate2).mean()
 
                         # --- Calculate loss for critic model
@@ -232,10 +243,13 @@ class PPO():
         self.epsilon = config.epsilon # PPO clipping objective
         self.lam = config.lam# value is following https://arxiv.org/abs/1506.0243
         self.entropy_coef = config.entropy_coef
+        self.vf_weight = config.vf_weigth
 
         # self.actor_lr = actor_lr
         # self.critic_lr = cricit_lr
         self.lr = config.lr
+        self.anneal_factor = config.anneal_factor
+        self.min_lr = config.min_lr
 
     @staticmethod
     def _log_infos(infos):
@@ -245,6 +259,7 @@ class PPO():
         height_penaltys = [info["height_penalty"] for info in infos]
         bumpiness_penaltys = [info["bumpiness_penalty"] for info in infos]
         hole_penaltys = [info["hole_penalty"] for info in infos]
+        line_density_reward = [info["line_density_reward"] for info in infos]
         game_over_penaltys = [info["game_over_penalty"] for info in infos]
 
         wandb.log({
@@ -254,7 +269,8 @@ class PPO():
             "height penalty": sum(height_penaltys),
             "bumpiness penalty": sum(bumpiness_penaltys),
             "hole_penalty": sum(hole_penaltys),
-            "game over penalty": sum(game_over_penaltys)
+            "game over penalty": sum(game_over_penaltys),
+            "line_density_reward": sum(line_density_reward),
             })
 
 
