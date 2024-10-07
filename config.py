@@ -7,6 +7,7 @@ class Config():
                 lam = 0.94, lr = 1e-3,
                 entropy_coef=0.01,
                 step_reward = 1e-3, line_clear_reward = 50,
+                line_density_reward = 0.8,
                 height_place_reward = 0.1, height_penalty = 0.2,
                 bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = ""):
         # learning params
@@ -31,6 +32,7 @@ class Config():
         self.height_penalty = height_penalty
         self.bumpiness_penalty = bumpiness_penalty
         self.hole_penalty = hole_penalty
+        self.line_density_reward = line_density_reward
         self.game_over_penalty = game_over_penalty
         self.step_reward = step_reward
         self.info = info

@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from environments.pygame_tetris import PygameTetris
-from environments.gymnasium_tetris import GymnasiumTetris
+# from environments.gymnasium_tetris import GymnasiumTetris
 from train_algorithms.ppo_trainer import PPO
 from config import Config
 from functools import partial
@@ -38,9 +38,23 @@ class TestTetris(unittest.TestCase):
         self.assertEqual((3, 160, 210), generator.observation_space)
         self.assertEqual(5, generator.action_space)
 
-
+    def test_calc_bumpiness(self):
+        tetris = PygameTetris.get_environment()
+        
+        tetris.static_grid = grid11
+        self.assertEqual(6, tetris.calculate_bumpiness(grid11))
 
     def test_count_holes(self):
+        tetris = PygameTetris.get_environment()
+        
+        tetris.static_grid = grid5
+        self.assertEqual(0, tetris.calculate_line_density())
+        tetris.static_grid = grid6
+        self.assertEqual(1.3, tetris.calculate_line_density())
+        tetris.static_grid = grid7
+        self.assertEqual(2.6, tetris.calculate_line_density())
+
+    def test_line_density(self):
         tetris = PygameTetris.get_environment()
         
         tetris.static_grid = grid1

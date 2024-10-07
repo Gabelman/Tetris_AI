@@ -142,17 +142,18 @@ class PygameTetris(Env):
                 "current_height": 0,
                 "bumpiness": 0,
                 "holes": 0,
-                "step_reward": self.step_reward,
+                "step_reward": 0,
                 "height_place_reward": 0,
                 "line_clear_reward": 0,
                 "height_penalty": 0,
                 "bumpiness_penalty": 0,
                 "hole_penalty": 0,
-                "game_over_penalty": 0
+                "game_over_penalty": 0,
+                "line_density_reward": 0,
                 }
         # Return values
         obs = np.zeros(self.observation_space)
-        reward = self.step_reward
+        reward = 0
         terminated = False
         # truncated = False
 
@@ -163,7 +164,12 @@ class PygameTetris(Env):
         
         # if not self.apply_action(action):
         #     reward -= 50
-        self.apply_action(action)
+        if self.apply_action(action) and action != Actions.NoAction:
+            reward += self.step_reward
+            info["step_reward"] = self.step_reward
+        # else:
+        #     info["step_reward"] = -self.step_reward
+        #     reward -= self.step_reward
 
         if self.current_tetromino.is_colliding(self.static_grid, (1, 0)):
             self.update_grid(self.static_grid, self.current_tetromino, None)
@@ -283,6 +289,7 @@ class PygameTetris(Env):
         # TODO: the issue here is that landing a tile incidentally gives negative reward. Maybe bumpiness and height need to be adjusted with a certain "gold standard".
         bumpiness_penalty = self.calculate_bumpiness(self.static_grid) * self.bumpiness_penalty
         height_penalty = self.calculate_height() * self.height_penalty
+        line_density_reward = self.calculate_line_density() * self.line_density_reward
         '''# Penalty for height differences
         for i in range(COLUMNS - 1):
             height_diff = abs(sum(grid[j][i] for j in range(ROWS)) - sum(grid[j][i+1] for j in range(ROWS)))
@@ -292,7 +299,8 @@ class PygameTetris(Env):
         info["height_penalty"] = height_penalty
         info["hole_penalty"] = hole_penalty
         info["bumpiness_penalty"] = bumpiness_penalty
-        return -height_penalty - hole_penalty - bumpiness_penalty
+        info["line_density_reward"] = line_density_reward
+        return -height_penalty - hole_penalty - bumpiness_penalty + line_density_reward
 
     def clear_lines(self):
         """
@@ -312,7 +320,7 @@ class PygameTetris(Env):
 
 
     def calculate_bumpiness(self, grid) -> int:
-        """Returns the sum of height-difference over columns."""
+        """Returns the sum of height-difference over columns, starting from a difference of 1."""
         heights = [0] * self.COLUMNS
         for col in range(self.COLUMNS):
             for row in range(self.ROWS):
@@ -322,50 +330,70 @@ class PygameTetris(Env):
         
         bumpiness = 0
         for i in range(self.COLUMNS - 1):
-            bumpiness += abs(heights[i] - heights[i+1])
+            bumpiness += max(0, abs(heights[i] - heights[i+1]) - 1)
         
         return bumpiness
 
-    def count_holes(self) -> int:
-        """
-        Returns the amount of holes. Holes are defined as follows:\n
-        - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
-        - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells.
+    def calculate_line_density(self) -> int:
+        line_density = 0
+        for row in self.static_grid:
+            density = 0
+            for col in row:
+                density += col
+            line_density += (density ** 2) / self.COLUMNS
+        return line_density
 
-        **Examples:**\n
-        [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
-        [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
-        [0,0,0,1,0,0]    [0,0,0,1,0,0]\n
-        [0,0,1,0,1,1]    [0,0,1,0,1,0]\n
-        [0,0,1,0,0,0]    [0,0,1,0,0,0]\n
-        The left example has 4 holes, whereas the right example only 1. In the right example, the cell at (5, 5) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
-        """
-        holes_table = self.generate_grid()
-        hole_count = 0
-        for row in range(self.ROWS):
-            # block_found = False
-            for col in range(self.COLUMNS):
+
+    def count_holes(self):
+        holes = 0
+        for col in range(self.COLUMNS):
+            block_found = False
+            for row in range(self.ROWS):
                 if self.static_grid[row][col]:
-                    continue
-                left_open = True
-                up_open = True
-                if col > 0:
-                    if self.static_grid[row][col - 1]:
-                        left_open = False
-                    elif holes_table[row][col - 1] > 0:
-                        left_open = False
-                        holes_table[row][col] = holes_table[row][col - 1]
-                if row > 0:
-                    if self.static_grid[row - 1][col] or holes_table[row - 1][col] > 0:
-                        up_open = False
-                if up_open: #opening on top found
-                    holes_table[row][col] = 0
-                if not up_open and not left_open:
-                    holes_table[row][col] += 1
-                    if col + 1 >= self.COLUMNS or self.static_grid[row][col + 1]:
-                        hole_count += holes_table[row][col]
+                    block_found = True
+                elif block_found:
+                    holes += 1
+        return holes
+    # def count_holes(self) -> int:
+    #     """
+    #     Returns the amount of holes. Holes are defined as follows:\n
+    #     - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
+    #     - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells.
+
+    #     **Examples:**\n
+    #     [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
+    #     [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
+    #     [0,0,0,1,0,0]    [0,0,0,1,0,0]\n
+    #     [0,0,1,0,1,1]    [0,0,1,0,1,0]\n
+    #     [0,0,1,0,0,0]    [0,0,1,0,0,0]\n
+    #     The left example has 4 holes, whereas the right example only 1. In the right example, the cell at (5, 5) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
+    #     """
+    #     holes_table = self.generate_grid()
+    #     hole_count = 0
+    #     for row in range(self.ROWS):
+    #         # block_found = False
+    #         for col in range(self.COLUMNS):
+    #             if self.static_grid[row][col]:
+    #                 continue
+    #             left_open = True
+    #             up_open = True
+    #             if col > 0:
+    #                 if self.static_grid[row][col - 1]:
+    #                     left_open = False
+    #                 elif holes_table[row][col - 1] > 0:
+    #                     left_open = False
+    #                     holes_table[row][col] = holes_table[row][col - 1]
+    #             if row > 0:
+    #                 if self.static_grid[row - 1][col] or holes_table[row - 1][col] > 0:
+    #                     up_open = False
+    #             if up_open: #opening on top found
+    #                 holes_table[row][col] = 0
+    #             if not up_open and not left_open:
+    #                 holes_table[row][col] += 1
+    #                 if col + 1 >= self.COLUMNS or self.static_grid[row][col + 1]:
+    #                     hole_count += holes_table[row][col]
                     
-        return hole_count
+    #     return hole_count
 
     def calculate_height(self):
         for row in range(self.ROWS):
@@ -433,24 +461,25 @@ class PygameTetris(Env):
     def generate_grid(self):
         return [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
     
-    def _init_rewards(self, config: Config = None):
+    def _init_rewards(self, config: Config):
         if config:
             self.line_clear_reward = config.line_clear_reward
             self.height_place_reward = config.height_place_reward
             self.height_penalty = config.height_penalty
             self.bumpiness_penalty = config.bumpiness_penalty
             self.hole_penalty = config.hole_penalty
+            self.line_density_reward = config.line_density_reward
             self.step_reward = config.step_reward
             self.game_over_penalty = config.game_over_penalty
-        else:
-            self.line_clear_reward = 50
-            self.height_place_reward = 0.3
-            self.height_penalty = 0.2
-            self.bumpiness_penalty = 0.5
-            self.hole_penalty = 2
-            self.game_over_penalty = 500
-            # self.action_penalty = 3e-4
-            self.step_reward = 1e-3
+        # else:
+        #     self.line_clear_reward = 50
+        #     self.height_place_reward = 0.3
+        #     self.height_penalty = 0.2
+        #     self.bumpiness_penalty = 0.5
+        #     self.hole_penalty = 2
+        #     self.game_over_penalty = 500
+        #     # self.action_penalty = 3e-4
+        #     self.step_reward = 1e-3
 
     def close(self):
         pygame.quit()
