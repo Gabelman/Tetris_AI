@@ -120,7 +120,7 @@ class Generator():
         action_distribution = [[f"action_{i}", bin_count_data[i].item()] for i in range(bin_count_data.shape[0])]
         table = wandb.Table(data=action_distribution, columns=["action", "amounts"])
         # wandb.log({"action distribution": table})
-        wandb.log({f"action_distribution{self.iteration}": wandb.plot.bar(table, "action", "amounts")})
+        wandb.log({f"action_distribution{self.iteration}": wandb.plot.bar(table, "action", "amounts", title=f"Action Distribution Iteration {self.iteration}")})
 
         
 
