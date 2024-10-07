@@ -52,7 +52,7 @@ class PPO():
         while current_timesteps < total_timesteps:
             # ---- Learning rate annealing
             anneal_coef = current_timesteps / total_timesteps * self.anneal_factor
-            new_lr = max(self.min_lr, (1 - anneal_coef) * self.lr)
+            new_lr = max(0, (1 - anneal_coef) * (self.lr - self.min_lr)) + self.min_lr
             self.optim.param_groups[0]["lr"] = new_lr
 
             # Track
