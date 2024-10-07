@@ -45,15 +45,17 @@ class TetrisAgent(nn.Module):
             nn.Conv2d(kernel_depth, kernel_depth2, 1), # Sum over Embeddings. This may as well be a fully connected linear layer. However, in that case BatchNorm2d couldn't be applied the same way.
             nn.BatchNorm2d(kernel_depth2),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
-            nn.ReLU(),
+            nn.ReLU(True),
             nn.Linear(kernel_depth2 * H * W, output_dim)
         )
         self.value_head = nn.Sequential(
             nn.Conv2d(kernel_depth, kernel_depth2, 1), # Sum over Embeddings
             nn.BatchNorm2d(kernel_depth2),
             nn.Flatten(), # Flatten shape (board_width, board_height, 1)
-            nn.ReLU(),
-            nn.Linear(kernel_depth2 * H * W, 1)
+            nn.ReLU(True),
+            nn.Linear(kernel_depth2 * H * W, 256),
+            nn.ReLU(True),
+            nn.Linear(256, 1),
         )
         if init_uniform:
             self.apply(self.init_xavier)
