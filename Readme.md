@@ -1,14 +1,20 @@
 ## Tetris AI Project
 ### Run the Code
-Requirements can be installed using
-```pip install -r requirements.txt```.\
-The required python version is: python3.11, as some functionalities of OpenAI's gymnasium don't work on python3.12 (specifically the visualization of the game).\
-If another python version is available, the following packages are required:
+In order to run all functionalities, these packages must be installed:
+```shell
+pip install gymnasium[atari] torch numpy tqdm wandb pygame
 ```
-gymnasium[atari]
-torch
-numpy
-tqdm
-wandb
-pygame
-```
+To train an AI, let the AI play the game or play the game yourself, run main.py:
+
+    python main.py
+
+You will be prompted to either train or play the game.
+### Playing the game
+*TODO:*
+- show a small snippet of the game screen.
+- quckly explain controls
+
+### Training the AI
+*TODO*
+- Explain the different models and environments
+- Explain how to train which model and what to be aware of concerning the different environments
