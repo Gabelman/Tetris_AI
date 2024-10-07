@@ -86,7 +86,8 @@ class PPO():
                 acc_loss = 0
                 acc_actor_loss = 0
                 acc_value_loss = 0
-                # acc_act_loss = 0
+                acc_entropy_bonus = 0
+
                 for update_idcs in update_batch_idcs:
                     self.optim.zero_grad()
 
@@ -97,18 +98,22 @@ class PPO():
                         update_obs = sample["observations"][idcs]
                         update_actions = sample["actions"][idcs]
                         update_log_probs_k = sample["log_probs"][idcs]
-                        update_rtgs = sample["values"][idcs] + A_k[idcs] # As A(s, a) = Q(s, a) - V(s) and because rewards_to_go are an unbiased estimator of Q(s, a)
-                        update_done_mask = sample["done_mask"][idcs]
+                        update_values = sample["values"][idcs]
                         update_A_k = A_k[idcs]
 
-                        # with autocast(device_type='cuda', dtype=torch.float16):
+                        update_rtgs = update_values + update_A_k # As A(s, a) = Q(s, a) - V(s) and because rewards_to_go are an unbiased estimator of Q(s, a)
+                        update_done_mask = sample["done_mask"][idcs]
+
+                        # --- Eval on current policy, pi_{\theta}
                         V, pi = self.evaluate(update_obs)
                         log_probs = pi.log_prob(update_actions)
 
                         V = V[update_done_mask]
-                        mini_log_probs = log_probs[update_done_mask]
-                        mini_log_probs_k = update_log_probs_k[update_done_mask]
-                        mini_A_k = update_A_k[update_done_mask]
+                        masked_values = update_values[update_done_mask]
+                        masked_rtgs = update_rtgs[update_done_mask]
+                        masked_log_probs = log_probs[update_done_mask]
+                        masked_log_probs_k = update_log_probs_k[update_done_mask]
+                        masked_A_k = update_A_k[update_done_mask]
 
                         # ---Entropy bonus
                         entropy = pi.entropy()
@@ -120,34 +125,43 @@ class PPO():
                         # ---Calculate loss for actor model
 
                         # \phi_{\theta}(a, s) / \phi_{\theta_{k}}(a, s)
-                        prob_ratio = torch.exp(mini_log_probs - mini_log_probs_k)
+                        prob_ratio = torch.exp(masked_log_probs - masked_log_probs_k)
                         
                         # surrogate objective see https://spinningup.openai.com/en/latest/algorithms/ppo.html
                         # torch.where: takes a conditional as first param, then the result for true, false. 
                         # clip = torch.where(mini_A_k >= 0, torch.min(prob_ratio, torch.tensor(1 + self.epsilon, dtype=prob_ratio.dtype, device=self.device)), torch.max(prob_ratio, torch.tensor(1 - self.epsilon, dtype=prob_ratio.dtype, device=self.device)))
                         clip = torch.clamp(prob_ratio, 1 - self.epsilon, 1 + self.epsilon)
-                        surrogate1 = mini_A_k * prob_ratio
-                        surrogate2 = mini_A_k * clip
+                        surrogate1 = masked_A_k * prob_ratio
+                        surrogate2 = masked_A_k * clip
 
                         # ---Calculate Losses
                         # actor_loss = (-clip * mini_A_k).mean() # negative, such that advantage is maximized
                         actor_loss = -torch.min(surrogate1, surrogate2).mean()
-                        value_loss = nn.MSELoss()(update_rtgs[update_done_mask], V)
 
-                        loss = actor_loss  + value_loss - entropy_bonus * self.entropy_coef # maximize actor_loss and minimize value_loss
+                        # --- Calculate loss for critic model
+                        clipped_value = torch.clamp(masked_values - V, min=-self.epsilon, max=self.epsilon)
+                        clipped_mse = torch.max((masked_rtgs - V) ** 2, (masked_rtgs - clipped_value) ** 2)
+                        # value_loss = nn.MSELoss()(update_rtgs[update_done_mask], V)
+                        value_loss = clipped_mse.mean()
+
+                        loss = actor_loss  + self.vf_weight * value_loss - entropy_bonus * self.entropy_coef # maximize actor_loss and minimize value_loss
 
                         loss /= self.num_mini_batch_updates
                         acc_loss += loss
                         acc_actor_loss += actor_loss / self.num_mini_batch_updates
-                        acc_value_loss += value_loss / self.num_mini_batch_updates
+                        acc_value_loss += value_loss * self.vf_weight / self.num_mini_batch_updates
+                        acc_entropy_bonus += entropy_bonus * self.entropy_coef / self.num_mini_batch_updates
 
-
+                        # actor_loss.backward()
+                        # value_loss.backward()
+                        # loss.backward()
                         self.scaler.scale(loss).backward()
                     
-                    wandb.log({"loss_per_iteration": acc_loss, "actor_loss_per_iteration": acc_actor_loss, "value_loss_per_iteration": acc_value_loss})
+                    wandb.log({"Overall Loss": acc_loss, "Actor Loss": acc_actor_loss, "Scaled Value Loss": acc_value_loss, "Scaled Entropy Bonus": acc_entropy_bonus, "Current Learning Rate": new_lr})
                     self.scaler.unscale_(self.optim)
                     torch.nn.utils.clip_grad_norm_(self.tetris_model.parameters(), max_norm=0.5)
-                    
+                    torch.nn.utils.clip_grad_value_(self.tetris_model.parameters(), clip_value=16)
+                    # self.optim.step()
                     self.scaler.step(self.optim)
                     self.scaler.update()
 
