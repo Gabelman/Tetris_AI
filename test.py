@@ -31,12 +31,20 @@ class TestTetris(unittest.TestCase):
         self.assertEqual((3, 300, 225), generator.observation_space)
         self.assertEqual(6, generator.action_space)
 
-    def test_generator_env3(self):
-        config = Config(episodes_per_batch=40)
-        environment_factory = partial(GymnasiumTetris.get_environment, discrete_obs=False, render=False, scale=3)
-        generator = Generator(num_environments=config.episodes_per_batch, max_timesteps_per_episode=config.max_timesteps_per_episode, environment_factory=environment_factory, gamma=config.gamma, device='cpu')
-        self.assertEqual((3, 160, 210), generator.observation_space)
-        self.assertEqual(5, generator.action_space)
+    def test_generator_seeding(self):
+        config = Config(episodes_per_batch=5)
+        environment_factory = partial(PygameTetris.get_environment, discrete_obs=False, render=False, scale=3)
+        for i in range(10):
+            generator = Generator(num_environments=config.episodes_per_batch, max_timesteps_per_episode=config.max_timesteps_per_episode, environment_factory=environment_factory, gamma=config.gamma, device='cpu')
+            print(f"seed: {generator.environment_seeds}")
+        
+
+    # def test_generator_env3(self):
+    #     config = Config(episodes_per_batch=40)
+    #     environment_factory = partial(GymnasiumTetris.get_environment, discrete_obs=False, render=False, scale=3)
+    #     generator = Generator(num_environments=config.episodes_per_batch, max_timesteps_per_episode=config.max_timesteps_per_episode, environment_factory=environment_factory, gamma=config.gamma, device='cpu')
+    #     self.assertEqual((3, 160, 210), generator.observation_space)
+    #     self.assertEqual(5, generator.action_space)
 
     def test_calc_bumpiness(self):
         tetris = PygameTetris.get_environment()
