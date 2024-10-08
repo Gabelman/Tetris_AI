@@ -5,12 +5,12 @@ class Config():
                 num_sub_mini_batches = 4, overall_timesteps = 10000,
                 gamma = 0.95, epsilon = 0.2,
                 lam = 0.94, lr = 1e-3,
-                anneal_factory = 1, min_lr = 1e-7,
+                anneal_factor = 1, min_lr = 1e-7,
                 entropy_coef=0.01, vf_weight=0.1,
                 step_reward = 1e-3, line_clear_reward = 50,
                 line_density_reward = 0.8,
                 height_place_reward = 0.1, height_penalty = 0.2,
-                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = ""):
+                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = "", load_model = -1):
         # learning params
         self.episodes_per_batch = episodes_per_batch
         self.max_timesteps_per_episode = max_timesteps_per_episode
@@ -27,7 +27,7 @@ class Config():
         self.vf_weigth = vf_weight
         self.lr = lr
         self.min_lr = min_lr
-        self.anneal_factor = anneal_factory
+        self.anneal_factor = anneal_factor
 
         # self.current_commit = "a57665626ba57f127bee842e3221b549cb823f82"
 
@@ -40,6 +40,8 @@ class Config():
         self.game_over_penalty = game_over_penalty
         self.step_reward = step_reward
         self.info = info
+
+        self.load_model = load_model
 
 
     def to_dict(self):
@@ -59,6 +61,7 @@ class Config():
             "min_lr": self.min_lr,
             # "current_commit": self.current_commit,
             "line_clear_reward": self.line_clear_reward,
+            "line_density_reward": self.line_density_reward,
             "height_place_reward": self.height_place_reward,
             "height_penalty": self.height_penalty,
             "bumpiness_penalty": self.bumpiness_penalty,
@@ -66,5 +69,6 @@ class Config():
             "step_reward": self.step_reward,
             "game_over_penalty": self.game_over_penalty,
             "info": self.info,
+            "load_model": self.load_model,
         }
         return dictionary
