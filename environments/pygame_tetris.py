@@ -276,7 +276,13 @@ class PygameTetris(Env):
     # Reward stuff
     def calculate_placement_reward(self, lines_cleared, height_placed, info):
         line_clear_reward = lines_cleared ** 2 * self.line_clear_reward
-        height_place_reward = (self.ROWS - height_placed) * self.height_place_reward
+        height_place_reward = (height_placed - (0.5 * self.ROWS)) # The lower, the better. Penalty after half the height
+        if height_place_reward >= 0:
+            height_place_reward = height_place_reward ** 1.3
+        else:
+            height_place_reward = -abs(height_place_reward) ** 1.3
+        height_place_reward *= self.height_place_reward
+
         info["height_place_reward"] = height_place_reward
         info["line_clear_reward"] = line_clear_reward
 
@@ -344,56 +350,56 @@ class PygameTetris(Env):
         return line_density
 
 
-    def count_holes(self):
-        holes = 0
-        for col in range(self.COLUMNS):
-            block_found = False
-            for row in range(self.ROWS):
-                if self.static_grid[row][col]:
-                    block_found = True
-                elif block_found:
-                    holes += 1
-        return holes
-    # def count_holes(self) -> int:
-    #     """
-    #     Returns the amount of holes. Holes are defined as follows:\n
-    #     - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
-    #     - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells.
-
-    #     **Examples:**\n
-    #     [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
-    #     [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
-    #     [0,0,0,1,0,0]    [0,0,0,1,0,0]\n
-    #     [0,0,1,0,1,1]    [0,0,1,0,1,0]\n
-    #     [0,0,1,0,0,0]    [0,0,1,0,0,0]\n
-    #     The left example has 4 holes, whereas the right example only 1. In the right example, the cell at (5, 5) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
-    #     """
-    #     holes_table = self.generate_grid()
-    #     hole_count = 0
-    #     for row in range(self.ROWS):
-    #         # block_found = False
-    #         for col in range(self.COLUMNS):
+    # def count_holes(self):
+    #     holes = 0
+    #     for col in range(self.COLUMNS):
+    #         block_found = False
+    #         for row in range(self.ROWS):
     #             if self.static_grid[row][col]:
-    #                 continue
-    #             left_open = True
-    #             up_open = True
-    #             if col > 0:
-    #                 if self.static_grid[row][col - 1]:
-    #                     left_open = False
-    #                 elif holes_table[row][col - 1] > 0:
-    #                     left_open = False
-    #                     holes_table[row][col] = holes_table[row][col - 1]
-    #             if row > 0:
-    #                 if self.static_grid[row - 1][col] or holes_table[row - 1][col] > 0:
-    #                     up_open = False
-    #             if up_open: #opening on top found
-    #                 holes_table[row][col] = 0
-    #             if not up_open and not left_open:
-    #                 holes_table[row][col] += 1
-    #                 if col + 1 >= self.COLUMNS or self.static_grid[row][col + 1]:
-    #                     hole_count += holes_table[row][col]
+    #                 block_found = True
+    #             elif block_found:
+    #                 holes += 1
+    #     return holes
+    def count_holes(self) -> int:
+        """
+        Returns the amount of holes. Holes are defined as follows:\n
+        - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
+        - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells.
+
+        **Examples:**\n
+        [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
+        [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
+        [0,0,0,1,0,0]    [0,0,0,1,0,0]\n
+        [0,0,1,0,1,1]    [0,0,1,0,1,0]\n
+        [0,0,1,0,0,0]    [0,0,1,0,0,0]\n
+        The left example has 4 holes, whereas the right example only 1. In the right example, the cell at (5, 5) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
+        """
+        holes_table = self.generate_grid()
+        hole_count = 0
+        for row in range(self.ROWS):
+            # block_found = False
+            for col in range(self.COLUMNS):
+                if self.static_grid[row][col]:
+                    continue
+                left_open = True
+                up_open = True
+                if col > 0:
+                    if self.static_grid[row][col - 1]:
+                        left_open = False
+                    elif holes_table[row][col - 1] > 0:
+                        left_open = False
+                        holes_table[row][col] = holes_table[row][col - 1]
+                if row > 0:
+                    if self.static_grid[row - 1][col] or holes_table[row - 1][col] > 0:
+                        up_open = False
+                if up_open: #opening on top found
+                    holes_table[row][col] = 0
+                if not up_open and not left_open:
+                    holes_table[row][col] += 1
+                    if col + 1 >= self.COLUMNS or self.static_grid[row][col + 1]:
+                        hole_count += holes_table[row][col]
                     
-    #     return hole_count
+        return hole_count
 
     def calculate_height(self):
         for row in range(self.ROWS):
