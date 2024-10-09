@@ -122,7 +122,7 @@ class Generator():
 
         # wandb.log({"action_log_probs": batch_log_probs})
 
-        bin_count_data = torch.bincount(batch_actions, minlength=6)
+        bin_count_data = torch.bincount(batch_actions[batch_done_mask], minlength=6)
         action_distribution = [[f"action_{i}", bin_count_data[i].item()] for i in range(bin_count_data.shape[0])]
         table = wandb.Table(data=action_distribution, columns=["action", "amounts"])
         # wandb.log({"action distribution": table})
