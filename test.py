@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from environments.pygame_tetris import PygameTetris
+from environments.pygame_tetris import PygameTetris, Placement
 # from environments.gymnasium_tetris import GymnasiumTetris
 from train_algorithms.ppo_trainer import PPO
 from config import Config
@@ -95,7 +95,15 @@ class TestTetris(unittest.TestCase):
         tetris.clear_lines()
         self.assertEqual(grid10, grid_gold10)
 
+    def test_discrete_placements(self):
+        env = PygameTetris(10, True) # seed 10: current_tetromino is Z-shape
+        valid = env.get_valid_placements()
+        indeces = [i for i in range(env.action_space) if valid[i]]
+        placements = [Placement(v) for v in indeces]
+        env.step(placements[5])
+        print(valid)
 
+        
     
     def test_action_space(self):
         env = PygameTetris.get_environment()

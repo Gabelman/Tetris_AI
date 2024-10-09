@@ -1,4 +1,5 @@
-from typing import SupportsFloat
+from typing import SupportsFloat, Union
+import warnings
 import pygame
 import random
 import numpy as np
@@ -13,6 +14,12 @@ from models.tetris_discrete_model import TetrisAI
 from config import Config
 from generator import Generator
 from functools import partial
+# from typing import List
+
+
+TETRIS_ROWS = 20
+TETRIS_COLUMNS = 10
+TETRIS_ROTATIONS = 4
 
 class Actions(Enum):
     NoAction = 0
@@ -23,6 +30,43 @@ class Actions(Enum):
     MoveDown = 5
 
 
+class Placement():
+    def __init__(self, value):
+        """
+        Class to control where a tetromino is place and with which rotation. There are Rows * Columns * Rotations such different possibilities.\n
+        They are encoded as:\n
+        Encoding.size = [[[Rows] * Cols] * Rotations].size\n
+        Hence:
+            - Encoding // (Rows * Cols) -> Gives Rotation
+            - Encoding % (Rows * Cols) -> Gives current Row-Col-Range // Cols -> gives current Column
+            - Encoding % Rows -> Gives current Row
+        """
+        assert(0 <= value and value < TETRIS_COLUMNS*TETRIS_ROWS*TETRIS_ROTATIONS)
+        self.value = value
+        self.ROWS = TETRIS_ROWS
+        self.COLUMNS = TETRIS_COLUMNS
+        self.ROTATIONS = TETRIS_ROTATIONS
+
+    @property
+    def row(self):
+        return self.value % self.ROWS
+    
+    @property
+    def column(self):
+        return (self.value % (self.ROWS * self.COLUMNS)) // self.ROWS
+    
+    @property
+    def rotation(self):
+        return self.value // (self.ROWS * self.COLUMNS)
+    
+    @staticmethod
+    def get_placement(row, col, rot):
+        value = row + TETRIS_ROWS * col + TETRIS_COLUMNS * TETRIS_ROWS * rot
+        return Placement(value)
+
+
+
+    
 
 # Colors
 BLACK = (0, 0, 0)
@@ -57,7 +101,7 @@ class Tetromino:
         self.col_size = grid_shape[1]
         self.x = grid_shape[1] // 2 - len(shape[0]) // 2
         self.y = 0
-        self.rotation_state = 0
+        self.rotation_state = 0 # positive in counterclockwise direction
 
     def rotate(self, clockwise=True):
         if len(self.shape) == 2 and len(self.shape[0]) == 2:  # O piece doesn't rotate
@@ -66,14 +110,24 @@ class Tetromino:
         # Perform rotation
         if clockwise:
             rotated = [list(row) for row in zip(*self.shape[::-1])]  # Clockwise rotation
-        else:
+            self.rotation_state = (self.rotation_state - 1) % TETRIS_ROTATIONS
+        else: #counterclockwise rotation
             inverted_rows = [row[::-1] for row in self.shape]
             rotated = [list(row) for row in zip(*inverted_rows)]
+            self.rotation_state = (self.rotation_state + 1) % TETRIS_ROTATIONS
         
         self.shape = rotated
-        self.rotation_state = (self.rotation_state + 1) % 4
+
+    def set_rotation(self, new_rotation_state: int):
+        rotation = (new_rotation_state - self.rotation_state) % TETRIS_ROTATIONS
+        for _ in range(rotation):
+            self.rotate()
 
     def is_colliding(self, grid, offset=(0, 0)):
+        """
+        Arguments:
+            offset(tuple[int, int]): Height, Width. Offset to add to current tetromino position.
+        """
         off_y, off_x = offset
         for y, row in enumerate(self.shape):
             for x, cell in enumerate(row):
@@ -86,14 +140,10 @@ class Tetromino:
                         return True
         return False
 
-    # def draw(self, screen, grid_size):
-    #     for y, row in enumerate(self.shape):
-    #         for x, cell in enumerate(row):
-    #             if cell:
-    #                 pygame.draw.rect(screen, RED, 
-    #                                  pygame.Rect((self.x + x) * grid_size, 
-    #                                              (self.y + y) * grid_size, 
-    #                                              grid_size, grid_size))
+    def set_placement(self, p: Placement):
+        self.set_rotation(p.rotation)
+        self.x = p.column
+        self.y = p.row
 
     def move_down(self):
         self.y += 1
@@ -102,19 +152,24 @@ class Tetromino:
 
 
 
+
+
 class PygameTetris(Env):
-    def __init__(self, seed, discrete_obs=True, render=False, scale=1, config: Config = None):
+    def __init__(self, seed, direct_placement:bool = False, discrete_obs=True, render=False, scale=1, config: Config = None):
         self._init_rewards(config)
         self.random_seed = seed #TODO   
         self.discrete_obs = discrete_obs
+        self.direct_placement: bool = direct_placement
         # Screen dimensions with extra width for the preview
         self.SCALE=scale
         self.PREVIEW_WIDTH = 25 * self.SCALE
         self.SCREEN_WIDTH = 50 * self.SCALE + self.PREVIEW_WIDTH
         self.SCREEN_HEIGHT = 100 * self.SCALE
-        self.COLUMNS = 10
-        self.ROWS = 20
         self.GRID_SIZE = 5 * self.SCALE
+
+        self.COLUMNS = TETRIS_COLUMNS
+        self.ROWS = TETRIS_ROWS
+        self.ROTATIONS = TETRIS_ROTATIONS
 
         self.grid = self.generate_grid() # This will keep track of the tiles that are set in place and the current moving tile. Observation are generated from here.
         self.static_grid = self.generate_grid() # This will keep track of the tiles that are set in place.
@@ -132,9 +187,13 @@ class PygameTetris(Env):
         self.step_count = 0
         info = {}
 
-    def step(self, action: Actions) -> tuple[np.ndarray, SupportsFloat, bool, dict[str, object]]:
+    def step(self, action: Union[Actions, Placement]) -> tuple[np.ndarray, SupportsFloat, bool, dict[str, object]]:
         if isinstance(action, int):
-            action = Actions(action)
+            if self.direct_placement:
+                action = Placement(action)
+            else:
+                action = Actions(action)
+        
 
         info = {
                 "tetromino_placed": False,
@@ -164,7 +223,13 @@ class PygameTetris(Env):
         
         # if not self.apply_action(action):
         #     reward -= 50
-        if self.apply_action(action) and action != Actions.NoAction:
+        if self.direct_placement:
+            old_tetromino = copy.deepcopy(self.current_tetromino)
+            if self._place_tetromino(action):
+                self.update_grid(self.grid, self.current_tetromino, old_tetromino)
+            else:
+                warnings.warn("Tried to place Tetromino on illegal space.", UserWarning)
+        elif self.apply_action(action):
             reward += self.step_reward
             info["step_reward"] = self.step_reward
         # else:
@@ -259,6 +324,31 @@ class PygameTetris(Env):
         self.update_grid(self.grid, self.current_tetromino, backup_tetromino)
         return True
     
+    def _place_tetromino(self, p: Placement) -> bool:
+        backup_t = copy.deepcopy(self.current_tetromino)
+        if not self._valid_placement(backup_t, p):
+            return False
+        self.current_tetromino.set_placement(p)
+        return True
+        
+    def _valid_placement(self, tetromino: Tetromino, p: Placement) -> bool:
+        tetromino.set_placement(p)
+        if tetromino.is_colliding(self.static_grid): # Tile collides with grid.
+            return False
+        if not tetromino.is_colliding(self.static_grid, offset=(1, 0)): # Tile is in the air.
+            return False
+        return True
+    
+    def get_valid_placements(self):
+        assert self.direct_placement == True, "Tried to get valid placements on an action-based environment."
+        valid = [False] * self.action_space
+        for v in range(self.action_space):
+            p = Placement(v)
+            t = copy.deepcopy(self.current_tetromino)
+            valid[v] = self._valid_placement(t, p)
+        return valid
+
+    
     def update_grid(self, grid, new_tetromino: Tetromino, remove_tetromino: Tetromino):
         """Update the information in each cell. Removes the content of remove_tetronimo, before the content of new_tetronimo is put in the grid."""
         if remove_tetromino:
@@ -336,7 +426,7 @@ class PygameTetris(Env):
         
         bumpiness = 0
         for i in range(self.COLUMNS - 1):
-            bumpiness += max(0, abs(heights[i] - heights[i+1]) - 1)
+            bumpiness += max(0, abs(heights[i] - heights[i+1]) - 1) ** 1.3
         
         return bumpiness
 
@@ -478,15 +568,16 @@ class PygameTetris(Env):
             self.line_density_reward = config.line_density_reward
             self.step_reward = config.step_reward
             self.game_over_penalty = config.game_over_penalty
-        # else:
-        #     self.line_clear_reward = 50
-        #     self.height_place_reward = 0.3
-        #     self.height_penalty = 0.2
-        #     self.bumpiness_penalty = 0.5
-        #     self.hole_penalty = 2
-        #     self.game_over_penalty = 500
-        #     # self.action_penalty = 3e-4
-        #     self.step_reward = 1e-3
+        else:
+            warnings.warn("Initialized Pygame environment with no config given.", UserWarning)
+            self.line_clear_reward = -1
+            self.height_place_reward = -1
+            self.height_penalty = -1
+            self.bumpiness_penalty = -1
+            self.hole_penalty = -1
+            self.line_density_reward = -1
+            self.step_reward = -1
+            self.game_over_penalty = -1
 
     def close(self):
         pygame.quit()
@@ -503,8 +594,11 @@ class PygameTetris(Env):
         ret += f"next shape: {self.next_tetromino.shape}"
         return ret
     @property
-    def action_space(self):
-        return len(Actions)
+    def action_space(self) -> int:
+        if self.direct_placement:
+            return self.ROWS * self.COLUMNS * self.ROTATIONS
+        else:
+            return len(Actions)
     
     @property
     def get_game_length(self):
