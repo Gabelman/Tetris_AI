@@ -13,6 +13,7 @@ from grids import *
 import pygame
 pygame.init()
 
+
 class TestTetris(unittest.TestCase):
     def test_obs_space(self):
         env = PygameTetris.get_environment()
@@ -75,7 +76,7 @@ class TestTetris(unittest.TestCase):
         self.assertEqual(0, tetris.calculate_height())
 
     def test_tetris_holes(self):
-        tetris = PygameTetris(0)
+        tetris = PygameTetris.get_environment(seed=0)
         
         tetris.static_grid = grid5
         self.assertEqual(0, tetris.count_holes())
@@ -89,14 +90,15 @@ class TestTetris(unittest.TestCase):
         self.assertEqual(3, tetris.count_holes())
         
     def test_clear_line(self):
-        tetris = PygameTetris(0)
+        tetris = PygameTetris.get_environment(seed=0)
 
         tetris.grid = grid10
         tetris.clear_lines()
         self.assertEqual(grid10, grid_gold10)
 
     def test_discrete_placements(self):
-        env = PygameTetris(10, True) # seed 10: current_tetromino is Z-shape
+        config = Config(predict_placement=True)
+        env = PygameTetris.get_environment(seed=10, config=config) # seed 10: current_tetromino is Z-shape
         valid = env.get_valid_placements()
         indeces = [i for i in range(env.action_space) if valid[i]]
         placements = [Placement(v) for v in indeces]

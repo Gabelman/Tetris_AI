@@ -4,8 +4,8 @@ from numpy import ndarray
 from typing import SupportsFloat
 
 class Env(ABC):
-    def __init__(self):
-        pass
+    def __init__(self, direct_placement):
+        self.direct_placement = direct_placement
 
     @abstractmethod
     def step(self, action) -> tuple[ndarray, SupportsFloat, bool, dict[str, object]]:

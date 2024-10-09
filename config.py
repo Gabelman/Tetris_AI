@@ -10,7 +10,7 @@ class Config():
                 step_reward = 1e-3, line_clear_reward = 50,
                 line_density_reward = 0.8,
                 height_place_reward = 0.1, height_penalty = 0.2,
-                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = "", load_model = -1):
+                bumpiness_penalty = 0.5, hole_penalty = 2, game_over_penalty = 500, info = "", predict_placement=False, load_model = -1):
         # learning params
         self.episodes_per_batch = episodes_per_batch
         self.max_timesteps_per_episode = max_timesteps_per_episode
@@ -41,7 +41,9 @@ class Config():
         self.step_reward = step_reward
         self.info = info
 
+        # model
         self.load_model = load_model
+        self.predict_placement = predict_placement # Action space will be placements if True, button-actions if False
 
 
     def to_dict(self):
@@ -70,5 +72,6 @@ class Config():
             "game_over_penalty": self.game_over_penalty,
             "info": self.info,
             "load_model": self.load_model,
+            "predict_placement": self.predict_placement
         }
         return dictionary

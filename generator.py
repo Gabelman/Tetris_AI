@@ -18,6 +18,7 @@ from typing import Callable
 class Generator():
     def __init__(self, num_environments, max_timesteps_per_episode, environment_factory: Callable[[int, bool, bool, int], Env], gamma, device):
         """
+        Works only for PygameTetris right now!
         Creates a Generator class to sample observations from environments.
         Arguments:
             num_environments(int): Number of environments to create and sample from.
@@ -35,6 +36,7 @@ class Generator():
         self.last_observations = [env.reset() for env in self.environments]
         self.action_space = self.environments[0].action_space
         self.observation_space = self.environments[0].observation_space
+        self.direct_placement = self.environments[0].direct_placement
         
         self.environments_done = [False for _ in range(num_environments)]
 
@@ -89,6 +91,10 @@ class Generator():
                     obs = self.obs_to_tensor(obs)
                     
                     pi, v = model(obs)
+                    if self.direct_placement:
+                        valid = torch.tensor(current_env.get_valid_placements())
+                        valid = valid.unsqueeze(0)
+                        pi[~valid] = float("-inf")
                     action, log_prob = self.sample_action(pi)
 
                     batch_obs[idx] = obs
@@ -124,7 +130,7 @@ class Generator():
 
         
 
-        sample["rtgs"] = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
+        # sample["rtgs"] = self._calc_rewards_to_go(batch_rewards, batch_episode_lengths)
         # batch_advantages = self._calc_advantages(batch_rewards, batch_values, batch_episode_lengths)
         return sample
     

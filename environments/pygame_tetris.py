@@ -155,11 +155,12 @@ class Tetromino:
 
 
 class PygameTetris(Env):
-    def __init__(self, seed, direct_placement:bool = False, discrete_obs=True, render=False, scale=1, config: Config = None):
+    def __init__(self, config: Config, seed, discrete_obs=True, render=False, scale=1):
+        super().__init__(config.predict_placement)
         self._init_rewards(config)
         self.random_seed = seed #TODO   
         self.discrete_obs = discrete_obs
-        self.direct_placement: bool = direct_placement
+
         # Screen dimensions with extra width for the preview
         self.SCALE=scale
         self.PREVIEW_WIDTH = 25 * self.SCALE
@@ -226,6 +227,8 @@ class PygameTetris(Env):
         if self.direct_placement:
             old_tetromino = copy.deepcopy(self.current_tetromino)
             if self._place_tetromino(action):
+                reward += self.step_reward
+                info["step_reward"]= self.step_reward
                 self.update_grid(self.grid, self.current_tetromino, old_tetromino)
             else:
                 warnings.warn("Tried to place Tetromino on illegal space.", UserWarning)
@@ -578,6 +581,7 @@ class PygameTetris(Env):
             self.line_density_reward = -1
             self.step_reward = -1
             self.game_over_penalty = -1
+            self.direct_placement = False
 
     def close(self):
         pygame.quit()
@@ -619,7 +623,7 @@ class PygameTetris(Env):
 
     @staticmethod
     def get_environment(seed=0, discrete_obs=False, render=False, scale=1, config: Config = None):
-        return PygameTetris(seed, discrete_obs, render=render, scale=scale, config=config)
+        return PygameTetris(config, seed, discrete_obs=discrete_obs, render=render, scale=scale)
 
 
 
