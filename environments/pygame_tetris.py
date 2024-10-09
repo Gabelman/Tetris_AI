@@ -119,9 +119,9 @@ class PygameTetris(Env):
         self.grid = self.generate_grid() # This will keep track of the tiles that are set in place and the current moving tile. Observation are generated from here.
         self.static_grid = self.generate_grid() # This will keep track of the tiles that are set in place.
         
-        random.seed(seed)
-        self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
-        self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
+        self.rng = random.Random(seed)
+        self.current_tetromino: Tetromino = Tetromino(self.rng.choice(SHAPES), (self.ROWS, self.COLUMNS))
+        self.next_tetromino: Tetromino = Tetromino(self.rng.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
         if render:
             self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
@@ -181,7 +181,7 @@ class PygameTetris(Env):
             
             
             self.current_tetromino = self.next_tetromino
-            self.next_tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
+            self.next_tetromino = Tetromino(self.rng.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
             self.update_grid(self.grid, self.current_tetromino, None)
 
@@ -217,8 +217,8 @@ class PygameTetris(Env):
 
         self.grid = self.generate_grid()
         self.static_grid = self.generate_grid()
-        self.current_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
-        self.next_tetromino: Tetromino = Tetromino(random.choice(SHAPES), (self.ROWS, self.COLUMNS))
+        self.current_tetromino: Tetromino = Tetromino(self.rng.choice(SHAPES), (self.ROWS, self.COLUMNS))
+        self.next_tetromino: Tetromino = Tetromino(self.rng.choice(SHAPES), (self.ROWS, self.COLUMNS))
 
         self.update_grid(self.grid, self.current_tetromino, None)
         self.render_screen()
@@ -535,14 +535,18 @@ class PygameTetris(Env):
 # rotation only works in one direction
 # No illegal move for rotation
 # No penalty for illegal moves
-def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1): # currently only works for conv2d model
-    factory = partial(PygameTetris.get_environment, render = True)
+def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1, scale=1): # currently only works for conv2d model
+    factory = partial(PygameTetris.get_environment, render = False)
+    factory_display = partial(PygameTetris.get_environment, render = True, scale=scale)
 
     environment_seeds = [np.random.randint(0, 2**31) for _ in range(games)]
     environments: list[PygameTetris] = [factory(seed) for seed in environment_seeds]
+    environments_display: list[PygameTetris] = [factory_display(seed) for seed in environment_seeds]
     observations = [env.reset() for env in environments]
+    for env in environments_display:
+        env.reset()
 
-    FPS = 2
+    FPS = speed
 
     observation_space = environments[0].observation_space
     action_space = environments[0].action_space
@@ -568,6 +572,8 @@ def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1)
     clock.tick(FPS)
     while running:
         game: PygameTetris = environments[env_idx]
+        display: PygameTetris = environments_display[env_idx]
+        
         for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -582,7 +588,8 @@ def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1)
         # observations[env_idx] = game.step(action) # TODO: Implement toggle for train/play in step
 
         observations[env_idx], _, game_over, _ = game.step(action)
-        game.render_screen()
+        _,_,_,_ = display.step(action)
+        display.render_screen()
 
         if game_over:
             env_idx += 1
