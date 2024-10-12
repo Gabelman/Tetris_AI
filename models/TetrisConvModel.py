@@ -60,26 +60,33 @@ class TetrisAgent(nn.Module):
         if init_uniform:
             self.apply(self.init_xavier)
 
-    def forward(self, obs):
-        obs = self.preprocess_obs(obs)
+    def forward(self, obs, invalid=None):
+        obs = self.to_tensor(obs, 4)
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
+        if invalid is not None:
+            invalid = self.to_tensor(invalid, 2)
+            pi[invalid] = float("-inf")
         v = self.value_head(initial_embed)
         return pi, v
     
-    def get_pis(self, obs):
-        obs = self.preprocess_obs(obs)
+    def get_pis(self, obs, invalid=None):
+        obs = self.to_tensor(obs, 4)
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
+        if invalid is not None:
+            invalid = self.to_tensor(invalid, 2)
+            pi[invalid] = float("-inf")
         return pi
     
     
-    def preprocess_obs(self, obs):
-        if isinstance(obs, np.ndarray):
-            obs = torch.tensor(obs).to(self.device, dtype=torch.float)
-        if len(obs.shape) == 3:
-            return obs.unsqueeze(0)
-        return obs
+    def to_tensor(self, list_like, target_shape_len):
+        tensor = list_like
+        if not isinstance(list_like, torch.Tensor):
+            tensor = torch.tensor(list_like).to(self.device)
+        while len(tensor.shape) < target_shape_len:
+            tensor = tensor.unsqueeze(0)
+        return tensor
     
     @staticmethod
     def init_xavier(m):

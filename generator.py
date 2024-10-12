@@ -55,6 +55,7 @@ class Generator():
         # batch_values = torch.full(self.num_environments, self.max_timesteps_per_episode, 0, dtype=torch.float)
         # batch_rewards_to_go = torch.full((self.num_environments * self.max_timesteps_per_episode,), 0, dtype=torch.float, device=self.device, requires_grad=False) # (num_episodes * episode_length)
         batch_done_mask = torch.full((self.num_environments * self.max_timesteps_per_episode,), False, device=self.device, requires_grad=False)
+        batch_valid = torch.full((self.num_environments * self.max_timesteps_per_episode, self.action_space), True, device=self.device, requires_grad=False)
         batch_episode_lengths = []
 
         game_done_lengths = []
@@ -70,7 +71,8 @@ class Generator():
             "done_mask": batch_done_mask,
             "episode_lengths": batch_episode_lengths,
             "infos": infos, 
-            "done_lengths": game_done_lengths
+            "done_lengths": game_done_lengths,
+            "valid": batch_valid,
         }
 
         # print(f"--------------------\nSampling for iteration {self.iteration}\n--------------------\n")
@@ -89,12 +91,11 @@ class Generator():
                     batch_done_mask[idx] = True
 
                     obs = self.obs_to_tensor(obs)
-                    
-                    pi, v = model(obs)
                     if self.direct_placement:
                         valid = torch.tensor(current_env.get_valid_placements())
-                        valid = valid.unsqueeze(0)
-                        pi[~valid] = float("-inf")
+                        batch_valid[idx] = valid
+                    
+                    pi, v = model(obs, ~batch_valid[idx])
                     action, log_prob = self.sample_action(pi)
 
                     batch_obs[idx] = obs

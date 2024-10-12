@@ -672,12 +672,16 @@ def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1,
         game: PygameTetris = environments[env_idx]
         display: PygameTetris = environments_display[env_idx]
         
+        invalid = [False] * game.action_space
         for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     running = False
                     break
-        pis = model.get_pis(observations[env_idx])
+        if game.direct_placement:
+            valid = game.get_valid_placements()
+            invalid = [not v for v in valid]
+        pis = model.get_pis(observations[env_idx], invalid=invalid)
         if prob_actions:
             action, _ = Generator.sample_action(pis)
         else:
