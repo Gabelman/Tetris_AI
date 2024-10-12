@@ -121,13 +121,12 @@ class Generator():
         if len(game_done_lengths) > 0:
             wandb.log({"average_game_lengths": sum(game_done_lengths)/len(game_done_lengths)})
 
-        # wandb.log({"action_log_probs": batch_log_probs})
-
-        bin_count_data = torch.bincount(batch_actions[batch_done_mask], minlength=6)
-        action_distribution = [[f"action_{i}", bin_count_data[i].item()] for i in range(bin_count_data.shape[0])]
-        table = wandb.Table(data=action_distribution, columns=["action", "amounts"])
-        # wandb.log({"action distribution": table})
-        wandb.log({f"action_distribution{self.iteration}": wandb.plot.bar(table, "action", "amounts", title=f"Action Distribution Iteration {self.iteration}")})
+        # Plot Action Distribution
+        if not self.direct_placement:
+            bin_count_data = torch.bincount(batch_actions[batch_done_mask], minlength=6)
+            action_distribution = [[f"action_{i}", bin_count_data[i].item()] for i in range(bin_count_data.shape[0])]
+            table = wandb.Table(data=action_distribution, columns=["action", "amounts"])
+            wandb.log({f"action_distribution{self.iteration}": wandb.plot.bar(table, "action", "amounts", title=f"Action Distribution Iteration {self.iteration}")})
 
         
 
