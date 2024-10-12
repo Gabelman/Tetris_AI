@@ -96,14 +96,20 @@ class TestTetris(unittest.TestCase):
         tetris.clear_lines()
         self.assertEqual(grid10, grid_gold10)
 
-    def test_discrete_placements(self):
+    # def test_discrete_placements(self):
+    #     config = Config(predict_placement=True)
+    #     env = PygameTetris.get_environment(seed=10, config=config) # seed 10: current_tetromino is Z-shape
+    #     valid = env.get_valid_placements()
+    #     indeces = [i for i in range(env.action_space) if valid[i]]
+    #     placements = [Placement(v) for v in indeces]
+    #     env.step(placements[5])
+    #     print(valid)
+
+    def test_valid_placements(self):
         config = Config(predict_placement=True)
-        env = PygameTetris.get_environment(seed=10, config=config) # seed 10: current_tetromino is Z-shape
-        valid = env.get_valid_placements()
-        indeces = [i for i in range(env.action_space) if valid[i]]
-        placements = [Placement(v) for v in indeces]
-        env.step(placements[5])
-        print(valid)
+        env = PygameTetris.get_environment(seed=10, config=config)
+        env.static_grid = grid12
+        env.get_valid_placements()
 
         
     

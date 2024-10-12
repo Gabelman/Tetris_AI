@@ -47,6 +47,21 @@ class Placement():
         self.COLUMNS = TETRIS_COLUMNS
         self.ROTATIONS = TETRIS_ROTATIONS
 
+    def set_rotation(self, rot):
+        rot = rot % self.ROTATIONS
+        diff = (rot - self.rotation) * self.COLUMNS * self.ROWS
+        self.value += diff
+
+    def set_row(self, row):
+        assert(0 <= row and row < self.ROWS)
+        diff = row - self.row
+        self.value += diff
+
+    def set_column(self, column):
+        assert(0 <= column and column < self.COLUMNS)
+        diff = (column - self.column) * self.ROWS
+        self.value += diff
+
     @property
     def row(self):
         return self.value % self.ROWS
@@ -61,8 +76,16 @@ class Placement():
     
     @staticmethod
     def get_placement(row, col, rot):
+        assert(0 <= col and col < TETRIS_COLUMNS)
+        assert(0 <= row and row < TETRIS_ROWS)
+        rot = rot % TETRIS_ROTATIONS
         value = row + TETRIS_ROWS * col + TETRIS_COLUMNS * TETRIS_ROWS * rot
         return Placement(value)
+    
+    def __equal__(self, other):
+        if not isinstance(other, Placement):
+            return False
+        return self.value == other.value
 
 
 
@@ -100,11 +123,16 @@ class Tetromino:
         self.row_size = grid_shape[0]
         self.col_size = grid_shape[1]
         self.x = grid_shape[1] // 2 - len(shape[0]) // 2
+        self.init_x = self.x
         self.y = 0
         self.rotation_state = 0 # positive in counterclockwise direction
 
     def rotate(self, clockwise=True):
         if len(self.shape) == 2 and len(self.shape[0]) == 2:  # O piece doesn't rotate
+            if clockwise:
+                self.rotation_state -= 1
+            else:
+                self.rotation_state += 1
             return
         
         # Perform rotation
@@ -121,7 +149,7 @@ class Tetromino:
     def set_rotation(self, new_rotation_state: int):
         rotation = (new_rotation_state - self.rotation_state) % TETRIS_ROTATIONS
         for _ in range(rotation):
-            self.rotate()
+            self.rotate(False)
 
     def is_colliding(self, grid, offset=(0, 0)):
         """
@@ -145,6 +173,9 @@ class Tetromino:
         self.x = p.column
         self.y = p.row
 
+    def get_spawn_placement(self):
+        return Placement.get_placement(0, self.init_x, 0)
+    
     def move_down(self):
         self.y += 1
 
@@ -187,6 +218,8 @@ class PygameTetris(Env):
 
         self.step_count = 0
         info = {}
+        if self.direct_placement:
+            self._generate_placement_graph()
 
     def step(self, action: Union[Actions, Placement]) -> tuple[np.ndarray, SupportsFloat, bool, dict[str, object]]:
         if isinstance(action, int):
@@ -328,28 +361,61 @@ class PygameTetris(Env):
         return True
     
     def _place_tetromino(self, p: Placement) -> bool:
-        backup_t = copy.deepcopy(self.current_tetromino)
-        if not self._valid_placement(backup_t, p):
+        tetromino_copy = copy.deepcopy(self.current_tetromino)
+        tetromino_copy.set_placement(p)
+        if tetromino_copy.is_colliding(self.static_grid): # Tile collides with grid.
+            return False
+        if not tetromino_copy.is_colliding(self.static_grid, offset=(1, 0)): # Tile is in the air.
             return False
         self.current_tetromino.set_placement(p)
         return True
         
-    def _valid_placement(self, tetromino: Tetromino, p: Placement) -> bool:
-        tetromino.set_placement(p)
-        if tetromino.is_colliding(self.static_grid): # Tile collides with grid.
-            return False
-        if not tetromino.is_colliding(self.static_grid, offset=(1, 0)): # Tile is in the air.
-            return False
-        return True
+    # def _valid_placement(self, tetromino: Tetromino, p: Placement) -> bool:
+    #     tetromino.set_placement(p)
+    #     if tetromino.is_colliding(self.static_grid): # Tile collides with grid.
+    #         return False
+    #     if not tetromino.is_colliding(self.static_grid, offset=(1, 0)): # Tile is in the air.
+    #         return False
+    #     return True
     
     def get_valid_placements(self):
         assert self.direct_placement == True, "Tried to get valid placements on an action-based environment."
+        valid_idcs = []
         valid = [False] * self.action_space
+        collide = [False] * self.action_space
+        t = copy.deepcopy(self.current_tetromino)
         for v in range(self.action_space):
             p = Placement(v)
-            t = copy.deepcopy(self.current_tetromino)
-            valid[v] = self._valid_placement(t, p)
+            t.set_placement(p)
+            collides = t.is_colliding(self.static_grid)
+            not_in_air = t.is_colliding(self.static_grid, offset=(1,0))
+            if not collides and not_in_air:
+                valid_idcs.append(v)
+            collide[v] = collides
+        for v in valid_idcs:
+            valid[v] = self._placement_reachable(collide, v, t.get_spawn_placement().value)
         return valid
+    
+    def _placement_reachable(self, collide, start: int, end: int):
+        visited = [False] * (self.action_space + 1)
+        agenda = [start]
+        while agenda:
+            n = agenda.pop()
+            if visited[n]:
+                continue
+            if n == end:
+                return True
+            visited[n] = True
+
+            if collide[n]:
+                continue
+            
+            agenda.extend(reversed(self.pos_graph[n])) # reversed for better ordering: up, left, right, rotations
+
+        return False
+
+
+
 
     
     def update_grid(self, grid, new_tetromino: Tetromino, remove_tetromino: Tetromino):
@@ -442,30 +508,19 @@ class PygameTetris(Env):
             line_density += (density ** 2) / self.COLUMNS
         return line_density
 
-
-    # def count_holes(self):
-    #     holes = 0
-    #     for col in range(self.COLUMNS):
-    #         block_found = False
-    #         for row in range(self.ROWS):
-    #             if self.static_grid[row][col]:
-    #                 block_found = True
-    #             elif block_found:
-    #                 holes += 1
-    #     return holes
     def count_holes(self) -> int:
         """
         Returns the amount of holes. Holes are defined as follows:\n
         - A free cell that is surrounded (except on its bottom) by filled spots or another quasi-surrounded cell
-        - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells.
+        - A quasi-surrounded cell is a cell that is surrounded by filled spots, however there may be a distance d between the cell and these filled spots > 1. In that distance there may only be other quasi-surrounded cells and at most d open cells.
 
         **Examples:**\n
         [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
         [0,0,0,0,0,0]    [0,0,0,0,0,0]\n
-        [0,0,0,1,0,0]    [0,0,0,1,0,0]\n
-        [0,0,1,0,1,1]    [0,0,1,0,1,0]\n
-        [0,0,1,0,0,0]    [0,0,1,0,0,0]\n
-        The left example has 4 holes, whereas the right example only 1. In the right example, the cell at (5, 5) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
+        [0,0,0,1,0,0]    [0,0,1,,0,0]\n
+        [0,0,1,0,1,1]    [0,1,0,1,0,0]\n
+        [0,0,1,0,0,0]    [0,1,0,0,0,0]\n
+        # The left example has 4 holes, whereas the right example only 2. In the right example, the cell at (5, 2) is not quasi-surrounded and hence (5, 4) and (5, 3) are also not quasi-surrounded. Therefore, only (4, 3) is a hole.
         """
         holes_table = self.generate_grid()
         hole_count = 0
@@ -561,6 +616,28 @@ class PygameTetris(Env):
     def generate_grid(self):
         return [[0 for _ in range(self.COLUMNS)] for _ in range(self.ROWS)]
     
+    def _generate_placement_graph(self) -> list[list]:
+        """From every placement, other reachable placements are: move left, move right, move down, rotate in 4 different position."""
+        num_nodes = self.action_space 
+        nodes = [Placement(p) for p in range(0, num_nodes)]
+        # init_placement = Placement.get_placement(self.current_tetromino.y, self.current_tetromino.x, self.current_tetromino.rotation_state)
+        graph: list[list] = [[] for _ in range(num_nodes)]
+        # graph[init_placement.value].append(num_nodes) # access to end-node
+        for n in nodes:
+            # if n == init_placement:
+            #     continue
+            if n.row > 0:
+                graph[n.value].append(n.value - 1) #One up
+            if n.column > 0:
+                graph[n.value].append(n.value - TETRIS_ROWS) #One left
+            if n.column < TETRIS_COLUMNS - 1:
+                graph[n.value].append(n.value + TETRIS_ROWS) #One right
+
+            graph[n.value].append(Placement.get_placement(n.row, n.column, n.rotation + 1).value)
+            graph[n.value].append(Placement.get_placement(n.row, n.column, n.rotation - 1).value)
+
+        self.pos_graph = graph
+
     def _init_rewards(self, config: Config):
         if config:
             self.line_clear_reward = config.line_clear_reward
@@ -623,6 +700,9 @@ class PygameTetris(Env):
 
     @staticmethod
     def get_environment(seed=0, discrete_obs=False, render=False, scale=1, config: Config = None):
+        if config is None:
+            warnings.warn("No config given to create environment. Default values are taken.", UserWarning)
+            config = Config()
         return PygameTetris(config, seed, discrete_obs=discrete_obs, render=render, scale=scale)
 
 
@@ -633,9 +713,10 @@ class PygameTetris(Env):
 # rotation only works in one direction
 # No illegal move for rotation
 # No penalty for illegal moves
-def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1, scale=1): # currently only works for conv2d model
-    factory = partial(PygameTetris.get_environment, render = False)
-    factory_display = partial(PygameTetris.get_environment, render = True, scale=scale)
+def let_AI_play_pygame(model_file, direct_placement, device, prob_actions: bool, games=1, speed=1, scale=1): # currently only works for conv2d model
+    config = Config(predict_placement=direct_placement)
+    factory = partial(PygameTetris.get_environment, render = False, config=config)
+    factory_display = partial(PygameTetris.get_environment, render = True, scale=scale, config=config)
 
     environment_seeds = [np.random.randint(0, 2**31) for _ in range(games)]
     environments: list[PygameTetris] = [factory(seed) for seed in environment_seeds]
@@ -665,6 +746,7 @@ def let_AI_play_pygame(model_file, device, prob_actions: bool, games=1, speed=1,
     game_over = False
     running = True
     env_idx = 0
+
 
     print(f"starting game: ------------{env_idx + 1}------------")
     clock.tick(FPS)
