@@ -1,0 +1,14 @@
+
+path: '/content/gdrive/My Drive/Tetris/data' # dataset root dir
+train: labeled_dataset  # train images (relative to 'path')
+val: labeled_dataset  # val images (relative to 'path')
+
+# Classes
+names:
+  0: I-block
+  1: J-block
+  2: L-block
+  3: O-block
+  4: S-block
+  5: T-block
+  6: Z-block
