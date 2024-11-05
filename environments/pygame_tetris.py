@@ -706,13 +706,6 @@ class PygameTetris(Env):
         return PygameTetris(config, seed, discrete_obs=discrete_obs, render=render, scale=scale)
 
 
-
-# potential buggy things so far:
-# penalty for making moves
-# holes are defined too losely
-# rotation only works in one direction
-# No illegal move for rotation
-# No penalty for illegal moves
 def let_AI_play_pygame(model_file, direct_placement, device, prob_actions: bool, games=1, speed=1, scale=1): # currently only works for conv2d model
     config = Config(predict_placement=direct_placement)
     factory = partial(PygameTetris.get_environment, render = False, config=config)
@@ -797,7 +790,9 @@ def let_AI_play_pygame(model_file, direct_placement, device, prob_actions: bool,
 
 
 def play_pygame(speed=1, scale=1): 
-    game = PygameTetris(0, discrete_obs=False, render=True, scale=scale)
+    seed = random.randint(1, 100)
+    config = Config()
+    game = PygameTetris(config, seed, discrete_obs=False, render=True, scale=scale)
     FPS = 64
 
     clock = pygame.time.Clock()
