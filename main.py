@@ -26,9 +26,10 @@ if __name__ == '__main__':
         if choice.lower() == 'train':
             choice = input("Log results?[n/Y]: ")
             if choice.lower() == 'n':
-                wandb. init(mode="disabled")
+                wandb.init(mode="disabled")
             else:
-                wandb.login()
+                wandb.init()
+            wandb.login()
             ppo = PPO(device, config, experiment=1)
             ppo.train(100000)
 
