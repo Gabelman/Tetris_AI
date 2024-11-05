@@ -719,16 +719,18 @@ def let_AI_play_pygame(model_file, direct_placement, device, prob_actions: bool,
     factory_display = partial(PygameTetris.get_environment, render = True, scale=scale, config=config)
 
     environment_seeds = [np.random.randint(0, 2**31) for _ in range(games)]
-    environments: list[PygameTetris] = [factory(seed) for seed in environment_seeds]
-    environments_display: list[PygameTetris] = [factory_display(seed) for seed in environment_seeds]
-    observations = [env.reset() for env in environments]
-    for env in environments_display:
-        env.reset()
+    game: list[PygameTetris] = factory(environment_seeds[0])
+    display: list[PygameTetris] = factory_display(environment_seeds[0])
+    # observations = [env.reset() for env in environments]
+    # for env in environments_display:
+    #     env.reset()
+    game.reset()
+    display.reset()
 
     FPS = speed
 
-    observation_space = environments[0].observation_space
-    action_space = environments[0].action_space
+    observation_space = game.observation_space
+    action_space = game.action_space
 
     model = TetrisAgent(*observation_space, action_space, device)
     # model = TetrisAI()
@@ -741,47 +743,57 @@ def let_AI_play_pygame(model_file, direct_placement, device, prob_actions: bool,
         return
     
     clock = pygame.time.Clock()
-
-
-    game_over = False
-    running = True
-    env_idx = 0
-
-
-    print(f"starting game: ------------{env_idx + 1}------------")
-    clock.tick(FPS)
-    while running:
-        game: PygameTetris = environments[env_idx]
-        display: PygameTetris = environments_display[env_idx]
-        
-        invalid = [False] * game.action_space
+    
+    b=True
+    while b:
         for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    running = False
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                running = False
+                break
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    b =False
                     break
-        if game.direct_placement:
-            valid = game.get_valid_placements()
-            invalid = [not v for v in valid]
-        pis = model.get_pis(observations[env_idx], invalid=invalid)
-        if prob_actions:
-            action, _ = Generator.sample_action(pis)
-        else:
-            action = torch.argmax(pis).item()
-        print(f"action: {action}")
-        # observations[env_idx] = game.step(action) # TODO: Implement toggle for train/play in step
+        clock.tick(30)
 
-        observations[env_idx], _, game_over, _ = game.step(action)
-        _,_,_,_ = display.step(action)
-        display.render_screen()
+    clock.tick(FPS)
+    for i in range(games):
+        print(f"starting game: ------------{i+1}------------")
+        # game: PygameTetris = factory(environment_seeds[i])
+        # display: PygameTetris = factory(environment_seeds[i])
+        obs=game.reset()
+        display.reset()
+        game_over = False
+        running = True
 
-        if game_over:
-            env_idx += 1
-            if env_idx >= games:
-                running = False 
-            print(f"starting game: ------------{env_idx + 1}------------")
+        while running:
+            
+            invalid = [False] * game.action_space
+            for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        running = False
+                        break
+            if game.direct_placement:
+                valid = game.get_valid_placements()
+                invalid = [not v for v in valid]
+            pis = model.get_pis(obs, invalid=invalid)
+            if prob_actions:
+                action, _ = Generator.sample_action(pis)
+            else:
+                action = torch.argmax(pis).item()
+            print(f"action: {action}")
+            # observations[env_idx] = game.step(action) # TODO: Implement toggle for train/play in step
 
-        clock.tick(FPS)
+            obs, _, game_over, _ = game.step(action)
+            _,_,_,_ = display.step(action)
+            display.render_screen()
+
+            if game_over:
+                break
+
+            clock.tick(FPS)
 
 
 def play_pygame(speed=1, scale=1): 
@@ -795,6 +807,7 @@ def play_pygame(speed=1, scale=1):
     
     clock.tick(FPS)
     frame_count = 0
+    
 
     while running:
         frame_count += 1
