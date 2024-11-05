@@ -65,7 +65,7 @@ class TetrisAgent(nn.Module):
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
         if invalid is not None:
-            invalid = self.to_tensor(invalid, 2)
+            invalid = self.to_tensor(invalid, 2, torch.bool)
             pi[invalid] = float("-inf")
         v = self.value_head(initial_embed)
         return pi, v
@@ -75,15 +75,15 @@ class TetrisAgent(nn.Module):
         initial_embed = self.board_embed(obs)
         pi = self.network_head(initial_embed)
         if invalid is not None:
-            invalid = self.to_tensor(invalid, 2)
+            invalid = self.to_tensor(invalid, 2, torch.bool)
             pi[invalid] = float("-inf")
         return pi
     
     
-    def to_tensor(self, list_like, target_shape_len):
+    def to_tensor(self, list_like, target_shape_len, dtype=torch.float):
         tensor = list_like
         if not isinstance(list_like, torch.Tensor):
-            tensor = torch.tensor(list_like).to(self.device)
+            tensor = torch.tensor(list_like).to(self.device, dtype=dtype)
         while len(tensor.shape) < target_shape_len:
             tensor = tensor.unsqueeze(0)
         return tensor
