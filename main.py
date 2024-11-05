@@ -16,6 +16,7 @@ if __name__ == '__main__':
     
     
     info = "Reward gives penalty for every step based on the static board state. Otherwise there is normal step reward and placement reward."
+    experiment = 1
     config = Config(episodes_per_batch=1, updates_per_iteration=2,
                   num_mini_batch_updates=5, num_sub_mini_batches=1,
                   max_timesteps_per_episode=150, overall_timesteps=50000, lr=0.01,
@@ -30,16 +31,17 @@ if __name__ == '__main__':
             else:
                 wandb.init()
             wandb.login()
-            ppo = PPO(device, config, experiment=1)
+            ppo = PPO(device, config, experiment=experiment)
             ppo.train(100000)
 
             ppo.close()
 
         elif choice.lower() == 'play':
             player = input("Enter the filename {model.pth} to load the model from. Press ENTER (empty string) to play as Human.")
-            if player:
+            if player == "gym":
+                let_AI_play_gymnasium("", False, device, True, speed=100)
+            elif player:
                 let_AI_play_pygame(player, False, device,games=1,prob_actions=False, speed=50, scale=6)
-                # let_AI_play_gymnasium(player, False, device, True, speed=100)
             else:
                 play_pygame(speed=3, scale=6)
         else:
